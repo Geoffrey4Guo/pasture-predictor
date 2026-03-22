@@ -1,0 +1,1925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pasture Predictions — Farm Intelligence Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  /* ── Surface hierarchy (bg shifts define space — no 1px borders) */
+  --bg:#f8faf5; --surface:#f3f4ef; --card:#ffffff;
+  --surface-high:#e7e9e4; --surface-highest:#e1e3de;
+
+  /* ── Primary: Deep forest green */
+  --primary:#003810; --primary-mid:#006e28;
+  --primary-container:#00511b; --on-primary-container:#3bcc5e;
+  --primary-fixed:#72fe88; --primary-fixed-dim:#53e16f;
+
+  /* ── Secondary: Warm soil brown */
+  --secondary:#79573f; --secondary-container:#ffd1b3;
+
+  /* ── Tertiary: Harvest gold */
+  --tertiary:#705d00; --tertiary-container:#c9a900;
+
+  /* ── Semantic aliases for existing render code */
+  --accent:#006e28; --accent-light:rgba(83,225,111,0.11);
+  --amber:#705d00; --amber-bg:rgba(201,169,0,0.11);
+  --sky:#79573f; --sky-bg:rgba(121,87,63,0.11);
+  --red:#ba1a1a;
+
+  /* ── Text */
+  --text:#191c1a; --muted:#43483f;
+
+  /* ── Ghost borders only (No-Line Rule) */
+  --border:rgba(25,28,26,0.06); --border-strong:rgba(25,28,26,0.13);
+
+  /* ── Typography */
+  --font-display:'Manrope',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono','Courier New',monospace;
+  --font-sans:'Inter',system-ui,sans-serif;
+
+  /* ── Elevation & Shape */
+  --shadow:0 12px 32px rgba(25,28,26,0.06);
+  --shadow-sm:0 4px 16px rgba(25,28,26,0.04);
+  --shadow-lg:0 24px 56px rgba(25,28,26,0.10);
+  --radius:1rem; --radius-lg:1.5rem; --radius-xl:2rem;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:14px;line-height:1.5;min-height:100vh}
+
+/* ── HEADER */
+header{background:var(--bg);padding:0 36px;display:flex;align-items:center;justify-content:space-between;height:62px;position:sticky;top:0;z-index:20;box-shadow:0 2px 20px rgba(25,28,26,0.05)}
+.logo{font-family:var(--font-display);font-size:22px;font-weight:800;color:var(--primary);letter-spacing:-0.5px}
+.hdr-r{display:flex;align-items:center;gap:14px}
+.live-pill{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;color:var(--on-primary-container);padding:5px 14px;border-radius:999px;background:rgba(83,225,111,0.11)}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--on-primary-container);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.clock{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+
+/* ── IMPORT BANNER */
+#importBanner{background:var(--surface);box-shadow:0 4px 20px rgba(25,28,26,0.04)}
+.import-inner{display:flex;align-items:center;gap:14px;padding:11px 36px;flex-wrap:wrap}
+.import-title{font-family:var(--font-display);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)}
+.file-zone{display:flex;align-items:center;gap:9px;cursor:pointer;padding:7px 16px;border-radius:var(--radius-lg);transition:all 0.18s;background:var(--card);box-shadow:var(--shadow-sm)}
+.file-zone:hover{background:var(--accent-light);box-shadow:0 6px 20px rgba(0,110,40,0.10)}
+.file-zone input{display:none}
+.file-zone-label{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.file-zone:hover .file-zone-label{color:var(--accent)}
+.file-ext{font-family:var(--font-mono);font-size:9px;padding:2px 8px;border-radius:999px;font-weight:700}
+.ext-csv{background:rgba(0,110,40,0.09);color:var(--accent)}
+.ext-xlsx{background:rgba(121,87,63,0.09);color:var(--secondary)}
+.loaded-badge{font-family:var(--font-mono);font-size:10px;padding:4px 12px;border-radius:999px;background:var(--accent-light);color:var(--accent);display:none}
+.example-link{font-family:var(--font-mono);font-size:10px;color:var(--muted);text-decoration:underline;cursor:pointer}
+.example-link:hover{color:var(--accent)}
+.import-sep{width:1px;height:28px;background:var(--border-strong)}
+
+/* ── KPI STRIP */
+.kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:16px 36px;background:var(--bg)}
+.kpi{padding:18px 20px;background:var(--card);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)}
+.kpi-lbl{font-family:var(--font-display);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:6px}
+.kpi-val{font-family:var(--font-display);font-size:24px;font-weight:800;color:var(--text);line-height:1;letter-spacing:-0.5px}
+.kpi-unit{font-size:13px;font-weight:600;color:var(--muted)}
+.kpi-sub{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:5px}
+.kpi-up{color:var(--accent)} .kpi-warn{color:var(--amber)}
+
+/* ── TABS */
+.tab-bar{background:var(--bg);display:flex;padding:0 36px;gap:2px;border-bottom:2px solid var(--surface-high)}
+.tab{font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--muted);padding:14px 18px;cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all 0.15s;letter-spacing:-0.2px}
+.tab:hover{color:var(--text);background:var(--surface);border-radius:var(--radius) var(--radius) 0 0}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+
+/* ── LAYOUT */
+.main{padding:28px 36px;max-width:1440px;margin:0 auto}
+.panel{display:none} .panel.active{display:block}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+.g6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.full{grid-column:1/-1}
+
+/* ── CARDS */
+.card{background:var(--card);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow)}
+.card-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.card-title{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--text);line-height:1.3;letter-spacing:-0.2px}
+.badge{font-family:var(--font-display);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;padding:4px 12px;border-radius:999px;white-space:nowrap}
+.bg{background:var(--accent-light);color:var(--accent)}
+.ba{background:var(--amber-bg);color:var(--amber)}
+.bs{background:var(--sky-bg);color:var(--secondary)}
+
+/* ── LEGEND */
+.legend{display:flex;flex-wrap:wrap;gap:9px}
+.leg{display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.lsq{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+
+/* ── PADDOCK TABLE */
+.ptable{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:11px}
+.ptable th{text-align:left;padding:9px 12px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px;background:var(--surface);font-weight:700}
+.ptable th:first-child{border-radius:var(--radius) 0 0 0}
+.ptable th:last-child{border-radius:0 var(--radius) 0 0}
+.ptable td{padding:11px 12px}
+.ptable tr:nth-child(even) td{background:rgba(25,28,26,0.015)}
+.ptable tr:hover td{background:var(--accent-light)}
+.mbar{display:flex;align-items:center;gap:6px}
+.bar-bg{flex:1;height:5px;background:var(--surface-high);border-radius:999px;overflow:hidden}
+.bar-fill{height:100%;border-radius:999px}
+
+/* ── EMPTY STATES */
+.empty-state{text-align:center;padding:72px 30px;color:var(--muted)}
+.empty-state .big{font-size:48px;margin-bottom:16px}
+.empty-state h3{font-family:var(--font-display);font-size:22px;font-weight:800;color:var(--text);margin-bottom:9px;letter-spacing:-0.4px}
+.empty-state p{font-size:13px;line-height:1.7;max-width:380px;margin:0 auto;color:var(--muted)}
+
+/* ── WEATHER FORECAST */
+.forecast-wrap{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;height:195px;align-items:stretch}
+.fc-day{flex:1;min-width:64px;max-width:92px;background:var(--surface);border-radius:var(--radius-lg);padding:10px 8px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.fc-day.today{background:var(--accent-light)}
+.fc-date{font-family:var(--font-display);font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+.fc-icon{font-size:22px;line-height:1}
+.fc-temp{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text)}
+.fc-precip{font-family:var(--font-mono);font-size:9px;color:var(--secondary)}
+.fc-wind{font-family:var(--font-mono);font-size:9px;color:var(--muted)}
+
+/* ── ANIMAL CARDS */
+.animals-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.search-inp{background:var(--card);border:none;border-radius:var(--radius-xl);padding:10px 16px;font-family:var(--font-mono);font-size:11px;color:var(--text);outline:none;width:230px;box-shadow:var(--shadow-sm)}
+.search-inp:focus{box-shadow:0 0 0 2px var(--accent-light),var(--shadow-sm)}
+.search-inp::placeholder{color:var(--muted)}
+.filter-btn{font-family:var(--font-display);font-size:10px;font-weight:700;padding:7px 16px;border-radius:999px;border:none;background:var(--card);color:var(--muted);cursor:pointer;transition:all 0.15s;box-shadow:var(--shadow-sm)}
+.filter-btn:hover,.filter-btn.on{color:var(--accent);background:var(--accent-light)}
+.sort-sel{background:var(--card);border:none;border-radius:var(--radius-lg);padding:8px 12px;font-family:var(--font-mono);font-size:10px;color:var(--text);outline:none;cursor:pointer;box-shadow:var(--shadow-sm)}
+.animal-count{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-left:auto}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.animal-card{background:var(--card);border-radius:var(--radius-lg);overflow:hidden;transition:box-shadow 0.18s;box-shadow:var(--shadow-sm)}
+.animal-card:hover{box-shadow:var(--shadow)}
+.ac-top{padding:18px 20px 13px;background:var(--surface);display:flex;align-items:flex-start;gap:13px}
+.ac-avatar{width:50px;height:50px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.ac-name{font-family:var(--font-display);font-size:20px;font-weight:800;color:var(--text);line-height:1.1;letter-spacing:-0.4px}
+.ac-tag{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:3px}
+.ac-status-row{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap}
+.ac-pill{font-family:var(--font-mono);font-size:9px;padding:3px 9px;border-radius:999px;border:1px solid;font-weight:600}
+.ac-paddock{font-family:var(--font-mono);font-size:9px;color:var(--muted);padding:3px 9px;border-radius:999px;background:var(--card)}
+.ac-sections{padding:16px 20px}
+.ac-section{margin-bottom:14px}
+.ac-section:last-child{margin-bottom:0}
+.ac-section-hdr{font-family:var(--font-display);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.ac-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+.ac-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 8px}
+.ac-field{display:flex;flex-direction:column;padding:4px 0}
+.ac-field-lbl{font-family:var(--font-mono);font-size:9px;color:var(--muted);letter-spacing:0.5px}
+.ac-field-val{font-family:var(--font-mono);font-size:11px;color:var(--text);font-weight:500;margin-top:1px}
+.ac-field-val.empty{color:var(--muted);font-weight:400;font-style:italic}
+.ac-notes{font-family:var(--font-sans);font-size:11px;color:var(--muted);line-height:1.5;padding:10px 13px;background:var(--surface);border-radius:var(--radius);font-style:italic}
+
+/* ── FIELD MAP */
+.fm-layout{display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start}
+.fm-map-card{background:var(--card);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
+.fm-toolbar{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--surface);flex-wrap:wrap}
+.fm-tool-btn{display:flex;align-items:center;gap:6px;font-family:var(--font-display);font-size:10px;font-weight:700;padding:7px 13px;border-radius:var(--radius-lg);border:none;background:var(--card);color:var(--muted);cursor:pointer;transition:all 0.15s;white-space:nowrap;box-shadow:var(--shadow-sm)}
+.fm-tool-btn:hover{color:var(--text)}
+.fm-tool-btn.active{background:var(--accent-light);color:var(--accent)}
+.fm-tool-btn.danger{color:var(--red)}
+.fm-tool-btn.danger:hover{background:rgba(186,26,26,0.08)}
+.fm-sep{width:1px;height:20px;background:var(--border-strong)}
+.fm-hint{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-left:auto}
+.fm-canvas-wrap{position:relative;width:100%;background:#1a1a18;min-height:460px;overflow:hidden;cursor:crosshair}
+.fm-canvas-wrap.pan-mode{cursor:grab}
+.fm-canvas-wrap.pan-mode:active{cursor:grabbing}
+.fm-canvas-wrap.select-mode{cursor:default}
+#fmBg{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;pointer-events:none;transform-origin:top left}
+#fmCanvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.fm-upload-prompt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:rgba(255,255,255,0.4);text-align:center;pointer-events:none}
+.fm-upload-prompt.hidden{display:none}
+.fm-upload-icon{font-size:48px;opacity:0.5}
+.fm-upload-prompt h3{font-family:var(--font-display);font-size:19px;font-weight:700;color:rgba(255,255,255,0.55)}
+.fm-upload-prompt p{font-family:var(--font-mono);font-size:11px;color:rgba(255,255,255,0.3)}
+.fm-upload-btn-wrap{pointer-events:all}
+.fm-upload-cta{background:linear-gradient(135deg,var(--primary),var(--primary-container));color:#fff;border:none;border-radius:var(--radius-xl);padding:12px 24px;font-family:var(--font-display);font-size:13px;font-weight:700;cursor:pointer;transition:opacity 0.15s;box-shadow:0 8px 24px rgba(0,56,16,0.28)}
+.fm-upload-cta:hover{opacity:0.88}
+.fm-sidebar{display:flex;flex-direction:column;gap:12px}
+.fm-info-card{background:var(--card);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow-sm)}
+.fm-info-title{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--text);margin-bottom:13px;letter-spacing:-0.2px}
+.fm-field{margin-bottom:10px}
+.fm-field label{font-family:var(--font-display);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);display:block;margin-bottom:4px}
+.fm-input{width:100%;background:var(--surface);border:none;border-radius:var(--radius);padding:9px 12px;font-family:var(--font-mono);font-size:11px;color:var(--text);outline:none}
+.fm-input:focus{box-shadow:0 0 0 2px var(--accent-light)}
+.fm-input::placeholder{color:var(--muted)}
+.fm-select{width:100%;background:var(--surface);border:none;border-radius:var(--radius);padding:9px 12px;font-family:var(--font-mono);font-size:11px;color:var(--text);outline:none;cursor:pointer}
+.fm-save-btn{width:100%;padding:11px;background:linear-gradient(135deg,var(--primary),var(--primary-container));color:#fff;border:none;border-radius:var(--radius-xl);font-family:var(--font-display);font-size:13px;font-weight:700;cursor:pointer;transition:all 0.18s;margin-top:5px;box-shadow:0 6px 20px rgba(0,56,16,0.20)}
+.fm-save-btn:hover{opacity:0.88;transform:translateY(-1px)}
+.fm-delete-btn{width:100%;padding:10px;background:rgba(186,26,26,0.07);color:var(--red);border:none;border-radius:var(--radius-xl);font-family:var(--font-display);font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;margin-top:7px}
+.fm-delete-btn:hover{background:rgba(186,26,26,0.14)}
+.fm-no-sel{color:var(--muted);font-family:var(--font-mono);font-size:11px;line-height:1.7;padding:4px 0}
+.fm-tables{margin-top:16px}
+.fm-table-section{margin-bottom:18px}
+.fm-table-hdr{font-family:var(--font-display);font-size:17px;font-weight:700;color:var(--text);margin-bottom:10px;letter-spacing:-0.3px}
+.fm-table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:11px;background:var(--card);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm)}
+.fm-table th{text-align:left;padding:10px 16px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;background:var(--surface)}
+.fm-table td{padding:12px 16px;vertical-align:middle}
+.fm-table tr:hover td{background:var(--accent-light);cursor:pointer}
+.fm-table tr.active-row td{background:rgba(83,225,111,0.07)}
+.fm-name-link{color:var(--accent);text-decoration:none;font-weight:600}
+.fm-name-link:hover{text-decoration:underline}
+.fm-count-badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600}
+.fm-au{font-size:9px;color:var(--muted);margin-left:2px}
+.fm-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.fm-days-sub{font-size:9px;color:var(--muted);margin-top:1px}
+.fm-empty-row td{color:var(--muted);font-style:italic}
+
+/* ── HEADER NAV */
+.hdr-nav-btn{font-family:var(--font-display);font-size:13px;font-weight:700;color:rgba(0,56,16,0.45);padding:7px 14px;cursor:pointer;border:none;background:none;border-radius:var(--radius);transition:all 0.15s;letter-spacing:-0.2px}
+.hdr-nav-btn:hover{color:var(--primary);background:var(--accent-light)}
+.hdr-nav-btn.active-nav{color:var(--primary);background:var(--accent-light)}
+
+/* ── BCS BAR */
+.bcs-bar{display:flex;gap:2px;margin-top:4px}
+.bcs-seg{height:6px;border-radius:999px;flex:1;background:var(--surface-high)}
+.bcs-seg.filled{background:linear-gradient(90deg,var(--primary),var(--primary-mid))}
+.bcs-seg.warn{background:var(--amber)}
+.bcs-seg.low{background:var(--red)}
+
+/* ── WEATHER LIVE */
+.wx-now{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:6px 0}
+.wx-big{font-family:var(--font-display);font-size:48px;font-weight:800;color:var(--text);line-height:1;letter-spacing:-2px}
+.wx-desc{font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--muted);margin-top:4px;text-transform:capitalize}
+.wx-loc{font-family:var(--font-mono);font-size:10px;color:var(--accent);margin-top:2px}
+.wx-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin-top:4px}
+.wx-stat{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.wx-stat b{color:var(--text);font-weight:600}
+.wx-icon{font-size:54px;line-height:1;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.08))}
+
+/* ── AERIAL MAP */
+.aerial-wrap{position:relative;width:100%;height:260px;border-radius:var(--radius-lg);overflow:hidden;background:var(--surface)}
+.aerial-wrap iframe{width:100%;height:100%;border:none;display:block}
+.aerial-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);text-align:center;padding:20px}
+.aerial-placeholder .big{font-size:40px}
+.aerial-placeholder p{font-family:var(--font-mono);font-size:11px;line-height:1.6}
+.aerial-label{position:absolute;bottom:10px;left:10px;font-family:var(--font-mono);font-size:9px;background:rgba(0,0,0,0.5);color:#fff;padding:3px 8px;border-radius:999px;pointer-events:none}
+
+/* ── FARM SETTINGS */
+.farm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:20px}
+.farm-card{background:var(--card);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);position:relative;border-left:4px solid var(--primary-mid)}
+.farm-card-name{font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--text);letter-spacing:-0.3px;margin-bottom:4px}
+.farm-card-addr{font-family:var(--font-mono);font-size:11px;color:var(--muted);line-height:1.6}
+.farm-card-id{font-family:var(--font-mono);font-size:9px;color:var(--accent);margin-top:6px}
+.farm-card-actions{display:flex;gap:7px;margin-top:12px}
+.farm-btn{font-family:var(--font-display);font-size:10px;font-weight:700;padding:5px 12px;border-radius:var(--radius);border:none;cursor:pointer;transition:all 0.15s}
+.farm-btn-edit{background:var(--surface);color:var(--muted)}
+.farm-btn-edit:hover{background:var(--surface-high);color:var(--text)}
+.farm-btn-del{background:rgba(186,26,26,0.07);color:var(--red)}
+.farm-btn-del:hover{background:rgba(186,26,26,0.14)}
+.farm-form{background:var(--card);border-radius:var(--radius-lg);padding:22px;box-shadow:var(--shadow);max-width:560px}
+.farm-form-title{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text);margin-bottom:18px;letter-spacing:-0.3px}
+.farm-field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.farm-field-row.single{grid-template-columns:1fr}
+.farm-field{display:flex;flex-direction:column;gap:4px}
+.farm-field label{font-family:var(--font-display);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.farm-input{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:var(--font-mono);font-size:11px;color:var(--text);outline:none;transition:border-color 0.15s}
+.farm-input:focus{border-color:var(--primary-mid);box-shadow:0 0 0 2px var(--accent-light)}
+.farm-save-btn{margin-top:14px;padding:11px 24px;background:linear-gradient(135deg,var(--primary),var(--primary-container));color:#fff;border:none;border-radius:var(--radius-xl);font-family:var(--font-display);font-size:13px;font-weight:700;cursor:pointer;transition:all 0.18s;box-shadow:0 6px 20px rgba(0,56,16,0.18)}
+.farm-save-btn:hover{opacity:.88;transform:translateY(-1px)}
+.farm-status{font-family:var(--font-mono);font-size:10px;margin-top:10px}
+
+/* ── FARM SELECT MODAL */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal-box{background:var(--card);border-radius:var(--radius-xl);padding:30px;width:420px;max-width:90vw;box-shadow:var(--shadow-lg)}
+.modal-title{font-family:var(--font-display);font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px;letter-spacing:-0.4px}
+.modal-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:18px;line-height:1.6}
+.modal-farm-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.modal-farm-opt{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--radius-lg);background:var(--surface);cursor:pointer;transition:background 0.15s;border:2px solid transparent}
+.modal-farm-opt:hover{background:var(--accent-light)}
+.modal-farm-opt.selected{border-color:var(--primary-mid);background:var(--accent-light)}
+.modal-farm-opt-name{font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--text)}
+.modal-farm-opt-addr{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+.modal-btn{font-family:var(--font-display);font-size:12px;font-weight:700;padding:9px 20px;border-radius:var(--radius-xl);border:none;cursor:pointer;transition:all 0.15s}
+.modal-btn-confirm{background:linear-gradient(135deg,var(--primary),var(--primary-container));color:#fff;box-shadow:0 4px 14px rgba(0,56,16,0.18)}
+.modal-btn-confirm:hover{opacity:.88}
+.modal-btn-cancel{background:var(--surface);color:var(--muted)}
+.modal-btn-cancel:hover{background:var(--surface-high);color:var(--text)}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:32px">
+    <div class="logo">Pasture Predictions</div>
+    <nav style="display:flex;align-items:center;gap:4px">
+      <button onclick="showTab('overview',this)" class="hdr-nav-btn active-nav" data-tab="overview">Overview</button>
+      <button onclick="showTab('paddocks',this)" class="hdr-nav-btn" data-tab="paddocks">Paddocks</button>
+      <button onclick="showTab('animals',this)" class="hdr-nav-btn" data-tab="animals">Animals</button>
+      <button onclick="showTab('fieldmap',this)" class="hdr-nav-btn" data-tab="fieldmap">Field Map</button>
+      <button onclick="showTab('farms',this)" class="hdr-nav-btn" data-tab="farms">🏡 Farms</button>
+    </nav>
+  </div>
+  <div class="hdr-r">
+    <div class="live-pill"><div class="live-dot"></div><span id="ltime">--:--:--</span></div>
+    <div class="clock" id="ldate">--</div>
+  </div>
+</header>
+
+<div id="importBanner">
+  <div class="import-inner">
+    <div class="import-title">Import Data</div>
+
+    <!-- Grass / Paddock data -->
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span style="font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Grass & Paddock Data</span>
+      <div style="display:flex;gap:6px">
+        <label class="file-zone" for="grassCsvInput">
+          <input type="file" id="grassCsvInput" accept=".csv" onchange="handleUpload(this,'grass')">
+          <span class="file-ext ext-csv">CSV</span>
+          <span class="file-zone-label">Paddock CSV</span>
+        </label>
+        <label class="file-zone" for="grassXlsxInput">
+          <input type="file" id="grassXlsxInput" accept=".xlsx,.xls" onchange="handleUpload(this,'grass')">
+          <span class="file-ext ext-xlsx">XLSX</span>
+          <span class="file-zone-label">Paddock XLSX</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="import-sep"></div>
+
+    <!-- Cow / Animal data -->
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span style="font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Cow & Herd Data</span>
+      <div style="display:flex;gap:6px">
+        <label class="file-zone" for="cowCsvInput">
+          <input type="file" id="cowCsvInput" accept=".csv" onchange="handleUpload(this,'cow')">
+          <span class="file-ext ext-csv">CSV</span>
+          <span class="file-zone-label">Cow CSV</span>
+        </label>
+        <label class="file-zone" for="cowXlsxInput">
+          <input type="file" id="cowXlsxInput" accept=".xlsx,.xls" onchange="handleUpload(this,'cow')">
+          <span class="file-ext ext-xlsx">XLSX</span>
+          <span class="file-zone-label">Cow XLSX</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="import-sep"></div>
+
+    <!-- Backend URL -->
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Backend</span>
+      <input type="text" id="backendUrl" value="http://localhost:8001"
+        style="font-family:var(--font-mono);font-size:10px;padding:4px 9px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);width:168px;outline:none">
+      <button onclick="loadFromBackend()"
+        style="font-family:var(--font-mono);font-size:10px;padding:4px 11px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--muted);cursor:pointer;white-space:nowrap">
+        Load ↻
+      </button>
+    </div>
+
+    <div class="import-sep"></div>
+    <span id="importStatus" style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">—</span>
+  </div>
+</div>
+
+<!-- ── WEATHER LOCATION BAR ──────────────────────────────────────────────── -->
+<div style="background:var(--surface);border-bottom:1px solid var(--border)">
+  <div style="display:flex;align-items:center;gap:10px;padding:9px 36px;flex-wrap:wrap">
+    <span style="font-family:var(--font-display);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)">Live Weather</span>
+    <input type="text" id="wxLocation" placeholder="City, Country  e.g. Charlottesville, US"
+      style="font-family:var(--font-mono);font-size:11px;padding:6px 12px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--card);color:var(--text);width:230px;outline:none"
+      onkeydown="if(event.key==='Enter') fetchWeather()">
+    <button onclick="fetchWeather()"
+      style="font-family:var(--font-display);font-size:11px;font-weight:700;padding:6px 16px;border-radius:var(--radius-lg);border:none;background:var(--primary);color:#fff;cursor:pointer;transition:opacity 0.15s"
+      onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+      Fetch ↻
+    </button>
+    <span id="wxStatus" style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">—</span>
+  </div>
+</div>
+
+<div class="kpi-strip">
+  <div class="kpi"><div class="kpi-lbl">Active Paddocks</div><div class="kpi-val" id="k-paddocks">—</div><div class="kpi-sub" id="k-paddocks-sub">—</div></div>
+  <div class="kpi"><div class="kpi-lbl">Avg Grass Height</div><div class="kpi-val" id="k-grass">—</div><div class="kpi-sub kpi-up" id="k-grass-sub">—</div></div>
+  <div class="kpi"><div class="kpi-lbl">Avg Soil Moisture</div><div class="kpi-val" id="k-moisture">—</div><div class="kpi-sub" id="k-moisture-sub">—</div></div>
+  <div class="kpi"><div class="kpi-lbl">Animals on Record</div><div class="kpi-val" id="k-animals">—</div><div class="kpi-sub" id="k-animals-sub">—</div></div>
+</div>
+
+<div class="tab-bar" style="display:none">
+  <button class="tab active" onclick="showTab('overview',this)" data-tabid="overview">Overview</button>
+  <button class="tab" onclick="showTab('paddocks',this)" data-tabid="paddocks">Paddock Monitor</button>
+  <button class="tab" onclick="showTab('animals',this)" data-tabid="animals">Animal Cards</button>
+  <button class="tab" onclick="showTab('fieldmap',this)" data-tabid="fieldmap">Field Map</button>
+</div>
+
+<div class="main">
+
+<!-- ═══ OVERVIEW ═══ -->
+<div id="panel-overview" class="panel active">
+  <div id="overviewEmpty" class="empty-state">
+    <div class="big">🌿</div>
+    <h3>Import your farm data to begin</h3>
+    <p>Upload a CSV or XLSX file using the import bar above. Download an example CSV to see the expected format.</p>
+  </div>
+  <div id="overviewContent" style="display:none">
+
+    <!-- TODAY'S ACTIONS — full width -->
+    <div class="card full" style="margin-bottom:15px">
+      <div class="card-hdr"><div class="card-title">Today's Recommended Actions</div><span class="badge bg">Live from DB</span></div>
+      <div id="suggestionsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:4px"></div>
+    </div>
+
+    <!-- CHARTS 2×2 -->
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Grass Height — All Paddocks, 14-Day History</div>
+          <div class="legend" id="grassLegend"></div></div>
+        <div style="position:relative;height:210px"><canvas id="grassMulti"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Temperature & Precipitation</div>
+          <div class="legend"><div class="leg"><div class="lsq" style="background:#b5600a"></div>Temp °F</div><div class="leg"><div class="lsq" style="background:#1a5c7a"></div>Precip in</div></div>
+        </div>
+        <div style="position:relative;height:210px"><canvas id="weatherChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Paddock Grass Height Snapshot</div><div class="badge bg" id="paddockCountBadge">— paddocks</div></div>
+        <div style="position:relative;height:210px"><canvas id="paddockBar"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Weather Forecast</div><div class="badge bs" id="forecastBadge">7 days</div></div>
+        <div id="forecastStrip" class="forecast-wrap" style="margin-top:4px">
+          <div style="color:var(--muted);font-family:var(--font-mono);font-size:11px;padding:20px 0">Load XLSX with Weather sheet or fetch live weather above</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIVE WEATHER + AERIAL MAP -->
+    <div class="g2" id="wxLiveRow" style="display:none">
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-title">Current Conditions</div>
+          <span class="badge bg" id="wxUpdatedBadge">live</span>
+        </div>
+        <div class="wx-now">
+          <div id="wxIconBig" class="wx-icon">🌤️</div>
+          <div>
+            <div class="wx-big" id="wxTempBig">—°</div>
+            <div class="wx-desc" id="wxDescBig">—</div>
+            <div class="wx-loc" id="wxLocBig">—</div>
+          </div>
+          <div class="wx-stats" id="wxStatGrid"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-title">Farm Location — Aerial View</div>
+          <span class="badge bs" id="wxMapBadge">OpenStreetMap</span>
+        </div>
+        <div class="aerial-wrap">
+          <div class="aerial-placeholder" id="aerialPlaceholder">
+            <div class="big">🗺️</div>
+            <p>Fetch live weather above to<br>load the aerial map view</p>
+          </div>
+          <iframe id="aerialFrame" style="display:none" allowfullscreen loading="lazy"></iframe>
+          <div class="aerial-label" id="aerialLabel" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══ PADDOCK MONITOR ═══ -->
+<div id="panel-paddocks" class="panel">
+  <div id="paddocksEmpty" class="empty-state">
+    <div class="big">🗺️</div>
+    <h3>No paddock data loaded</h3>
+    <p>Upload a CSV or XLSX file to view paddock sensor readings, grass forecasts, and rotation schedules.</p>
+  </div>
+  <div id="paddocksContent" style="display:none">
+    <div class="card full" style="margin-bottom:15px">
+      <div class="card-hdr"><div class="card-title">Paddock Sensor Dashboard</div><div class="badge bs" id="paddockTimestamp">—</div></div>
+      <table class="ptable"><thead><tr>
+        <th>ID</th><th>Name</th><th>Acres</th><th>Grass Ht.</th><th style="width:100px"></th>
+        <th>Soil Moist.</th><th style="width:100px"></th><th>Temp</th><th>Breed</th><th>Status</th>
+      </tr></thead>
+      <tbody id="paddockTbody"></tbody></table>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">7-Day Grass Height Forecast</div><div class="badge bg">+0.47 in/day growth model</div></div>
+        <div style="position:relative;height:230px"><canvas id="predChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Rotation Readiness — Days Until Ready</div><div class="badge ba">30-day rest target</div></div>
+        <div style="position:relative;height:230px"><canvas id="rotChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ANIMAL CARDS ═══ -->
+<div id="panel-animals" class="panel">
+  <div id="animalsEmpty" class="empty-state">
+    <div class="big">🐄</div>
+    <h3>No animal records loaded</h3>
+    <p>Upload the XLSX file (which includes an Animals sheet) to view individual animal name cards with full records.</p>
+  </div>
+  <div id="animalsContent" style="display:none">
+    <div class="animals-toolbar">
+      <input type="text" class="search-inp" id="animalSearch" placeholder="Search by name, tag, breed…" oninput="filterAnimals()">
+      <button class="filter-btn on" onclick="filterByStatus(this,'all')">All</button>
+      <button class="filter-btn" onclick="filterByStatus(this,'Active')">Active</button>
+      <button class="filter-btn" onclick="filterByStatus(this,'Female')">Female</button>
+      <button class="filter-btn" onclick="filterByStatus(this,'Male')">Male</button>
+      <select class="sort-sel" id="animalSort" onchange="filterAnimals()">
+        <option value="name">Sort: Name</option>
+        <option value="tag">Sort: Tag #</option>
+        <option value="breed">Sort: Breed</option>
+        <option value="weight">Sort: Weight</option>
+        <option value="paddock">Sort: Paddock</option>
+      </select>
+      <span class="animal-count" id="animalCount"></span>
+    </div>
+    <div class="cards-grid" id="cardsGrid"></div>
+  </div>
+</div>
+
+<!-- ═══ FIELD MAP ═══ -->
+<div id="panel-fieldmap" class="panel">
+  <div class="fm-layout">
+    <!-- MAP COLUMN -->
+    <div>
+      <div class="fm-map-card">
+        <div class="fm-toolbar">
+          <label class="fm-tool-btn" for="fmImageUpload" title="Upload aerial image of your farm">
+            📷 <span>Upload Aerial Image</span>
+            <input type="file" id="fmImageUpload" accept="image/*" style="display:none" onchange="fmLoadImage(this)">
+          </label>
+          <div class="fm-sep"></div>
+          <button class="fm-tool-btn active" id="fmDrawBtn" onclick="fmSetMode('draw')" title="Click to place polygon corners, double-click to close">✏️ Draw Paddock</button>
+          <button class="fm-tool-btn" id="fmSelectBtn" onclick="fmSetMode('select')" title="Click a paddock to select and edit it">☞ Select</button>
+          <button class="fm-tool-btn" id="fmPanBtn" onclick="fmSetMode('pan')" title="Pan around the image">✥ Pan</button>
+          <div class="fm-sep"></div>
+          <button class="fm-tool-btn" onclick="fmZoom(1.2)" title="Zoom in">＋</button>
+          <button class="fm-tool-btn" onclick="fmZoom(0.83)" title="Zoom out">－</button>
+          <button class="fm-tool-btn" onclick="fmResetView()" title="Fit to screen">⊡ Fit</button>
+          <div class="fm-sep"></div>
+          <button class="fm-tool-btn danger" onclick="fmUndoPoint()" title="Undo last point while drawing">↩ Undo</button>
+          <button class="fm-tool-btn danger" onclick="fmCancelDraw()" title="Cancel current polygon">✕ Cancel</button>
+          <div class="fm-hint" id="fmHint">Upload an image, then draw paddock polygons</div>
+        </div>
+        <div class="fm-canvas-wrap" id="fmWrap">
+          <img id="fmBg" src="" alt="" style="display:none">
+          <canvas id="fmCanvas"></canvas>
+          <div class="fm-upload-prompt" id="fmUploadPrompt">
+            <div class="fm-upload-icon">🛰️</div>
+            <h3>Add your aerial image</h3>
+            <p>Upload a satellite or drone photo of your farm<br>then draw paddock boundaries on top</p>
+            <div class="fm-upload-btn-wrap">
+              <label for="fmImageUpload" class="fm-upload-cta">Upload Image</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLES BELOW MAP -->
+      <div class="fm-tables">
+        <div class="fm-table-section">
+          <div class="fm-table-hdr">Active Grazing Locations</div>
+          <table class="fm-table" id="fmActiveTable">
+            <thead><tr>
+              <th>Name</th>
+              <th>Animal Count</th>
+              <th>Avg Days in Location</th>
+              <th>Animal-Days / Acre</th>
+            </tr></thead>
+            <tbody id="fmActiveTbody">
+              <tr class="fm-empty-row"><td colspan="4">No active paddocks yet — draw paddocks and set status to Grazing</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="fm-table-section">
+          <div class="fm-table-hdr">Open Locations</div>
+          <table class="fm-table" id="fmOpenTable">
+            <thead><tr>
+              <th>Name</th>
+              <th>Last Grazed</th>
+              <th>Last Count</th>
+              <th>Avg Days in Location</th>
+              <th>Animal-Days / Acre</th>
+              <th>Days Rested</th>
+            </tr></thead>
+            <tbody id="fmOpenTbody">
+              <tr class="fm-empty-row"><td colspan="6">No open paddocks yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="fm-sidebar">
+      <div class="fm-info-card">
+        <div class="fm-info-title" id="fmSideTitle">Paddock Details</div>
+        <div id="fmSideNoSel" class="fm-no-sel">
+          Draw a new paddock or click an existing one to view and edit its details here.
+        </div>
+        <div id="fmSideForm" style="display:none">
+          <div class="fm-field">
+            <label>Name</label>
+            <input class="fm-input" id="fmFldName" placeholder="e.g. North Field 1">
+          </div>
+          <div class="fm-field">
+            <label>Status</label>
+            <select class="fm-select" id="fmFldStatus">
+              <option value="ready">Ready to graze</option>
+              <option value="grazing">Currently grazing</option>
+              <option value="resting">Resting</option>
+              <option value="hay">Hay reserve</option>
+            </select>
+          </div>
+          <div class="fm-field">
+            <label>Acres</label>
+            <input class="fm-input" id="fmFldAcres" placeholder="0.0" type="number" step="0.1">
+          </div>
+          <div class="fm-field">
+            <label>Animal Count</label>
+            <input class="fm-input" id="fmFldCount" placeholder="0" type="number">
+          </div>
+          <div class="fm-field">
+            <label>Avg Days in Location</label>
+            <input class="fm-input" id="fmFldDays" placeholder="0" type="number">
+          </div>
+          <div class="fm-field">
+            <label>Animal Type / Breed</label>
+            <input class="fm-input" id="fmFldBreed" placeholder="e.g. Angus, Mixed">
+          </div>
+          <div class="fm-field">
+            <label>Last Grazed</label>
+            <input class="fm-input" id="fmFldLastGrazed" placeholder="e.g. Mar 10, 2025" type="date">
+          </div>
+          <div class="fm-field">
+            <label>Notes</label>
+            <input class="fm-input" id="fmFldNotes" placeholder="Optional notes…">
+          </div>
+          <button class="fm-save-btn" onclick="fmSavePaddock()">Save Paddock</button>
+          <button class="fm-delete-btn" onclick="fmDeleteSelected()">Delete Paddock</button>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="fm-info-card">
+        <div class="fm-info-title">Status Legend</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:9px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:rgba(61,107,46,0.55);border:2px solid #3d6b2e;flex-shrink:0"></span><span style="font-family:var(--font-mono);font-size:11px;color:var(--text)">Ready to graze</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:rgba(26,92,122,0.55);border:2px solid #1a5c7a;flex-shrink:0"></span><span style="font-family:var(--font-mono);font-size:11px;color:var(--text)">Currently grazing</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:rgba(181,96,10,0.55);border:2px solid #b5600a;flex-shrink:0"></span><span style="font-family:var(--font-mono);font-size:11px;color:var(--text)">Resting</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:rgba(124,77,0,0.55);border:2px solid #7c4d00;flex-shrink:0"></span><span style="font-family:var(--font-mono);font-size:11px;color:var(--text)">Hay reserve</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:rgba(255,210,0,0.5);border:2px solid #c8a800;flex-shrink:0"></span><span style="font-family:var(--font-mono);font-size:11px;color:var(--text)">Unsaved (drawing)</span></div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="fm-info-card" id="fmStatsCard">
+        <div class="fm-info-title">Map Summary</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="background:var(--surface);border-radius:7px;padding:10px;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:20px;font-weight:500;color:var(--text)" id="fmStatTotal">0</div>
+            <div style="font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-top:2px">Paddocks</div>
+          </div>
+          <div style="background:var(--surface);border-radius:7px;padding:10px;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:20px;font-weight:500;color:var(--accent)" id="fmStatGrazing">0</div>
+            <div style="font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-top:2px">Grazing</div>
+          </div>
+          <div style="background:var(--surface);border-radius:7px;padding:10px;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:20px;font-weight:500;color:var(--sky)" id="fmStatReady">0</div>
+            <div style="font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-top:2px">Ready</div>
+          </div>
+          <div style="background:var(--surface);border-radius:7px;padding:10px;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:20px;font-weight:500;color:var(--amber)" id="fmStatResting">0</div>
+            <div style="font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-top:2px">Resting</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══ FARM SETTINGS ═══ -->
+<div id="panel-farms" class="panel">
+  <div style="max-width:900px">
+
+    <!-- Saved farms list -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-family:var(--font-display);font-size:22px;font-weight:800;color:var(--text);letter-spacing:-0.5px">Farm Locations</div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:3px">Cows are assigned to a farm when uploaded. Add a second farm to enable per-upload farm selection.</div>
+      </div>
+    </div>
+
+    <div id="farmCardsGrid" class="farm-grid">
+      <div style="color:var(--muted);font-family:var(--font-mono);font-size:11px;padding:16px 0">No farms saved yet — add one below.</div>
+    </div>
+
+    <!-- Add / Edit form -->
+    <div class="farm-form" id="farmForm">
+      <div class="farm-form-title" id="farmFormTitle">Add New Farm</div>
+      <input type="hidden" id="farmEditId" value="">
+      <div class="farm-field-row single">
+        <div class="farm-field">
+          <label>Farm Name</label>
+          <input class="farm-input" id="farmName" placeholder="e.g. Home Farm, North Property">
+        </div>
+      </div>
+      <div class="farm-field-row single">
+        <div class="farm-field">
+          <label>Street Address</label>
+          <input class="farm-input" id="farmStreet" placeholder="e.g. 185 Vaughan Dr">
+        </div>
+      </div>
+      <div class="farm-field-row">
+        <div class="farm-field">
+          <label>City</label>
+          <input class="farm-input" id="farmCity" placeholder="e.g. Charlottesville">
+        </div>
+        <div class="farm-field">
+          <label>State</label>
+          <input class="farm-input" id="farmState" placeholder="e.g. VA">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="farm-save-btn" onclick="saveFarm()">Save Farm</button>
+        <button id="farmCancelBtn" onclick="cancelFarmEdit()" style="display:none;font-family:var(--font-display);font-size:12px;font-weight:700;padding:9px 18px;border-radius:var(--radius-xl);border:none;background:var(--surface);color:var(--muted);cursor:pointer">Cancel</button>
+      </div>
+      <div class="farm-status" id="farmStatus"></div>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- end .main -->
+
+<!-- ═══ FARM SELECT MODAL ═══ -->
+<div id="farmSelectModal" class="modal-backdrop" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">Which farm are these cows from?</div>
+    <div class="modal-sub" id="farmModalSub">You have multiple farms saved. Select which farm these animals belong to before importing.</div>
+    <div class="modal-farm-list" id="farmModalList"></div>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-cancel" onclick="closeFarmModal(false)">Cancel</button>
+      <button class="modal-btn modal-btn-confirm" onclick="closeFarmModal(true)">Confirm & Import ↗</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let STATE = { paddocks:[], weather:[], animals:[], farms:[], loaded:false };
+let charts = {};
+let animalFilter = { status:'all', text:'' };
+// Farm-select modal state
+let _pendingUploadInput = null;
+let _pendingUploadBuffer = null;
+let _pendingUploadFilename = null;
+let _selectedFarmId = null;
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+(function tick(){
+  const n=new Date();
+  document.getElementById('ltime').textContent=n.toLocaleTimeString();
+  document.getElementById('ldate').textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  setTimeout(tick,1000);
+})();
+
+function showTab(id,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.hdr-nav-btn').forEach(b=>b.classList.remove('active-nav'));
+  btn.classList.add('active');
+  // sync header nav
+  const hdrBtn=document.querySelector('.hdr-nav-btn[data-tab="'+id+'"]');
+  if(hdrBtn) hdrBtn.classList.add('active-nav');
+  // sync tab bar
+  const tabBtn=document.querySelector('.tab-bar .tab[data-tabid="'+id+'"]');
+  if(tabBtn) tabBtn.classList.add('active');
+  document.getElementById('panel-'+id).classList.add('active');
+}
+
+
+// ── Status helper ─────────────────────────────────────────────────────────────
+function setStatus(msg, color){
+  const el=document.getElementById('importStatus');
+  el.textContent=msg; el.style.color=color||'var(--muted)';
+}
+function apiBase(){
+  return document.getElementById('backendUrl').value.trim().replace(/\/$/,'');
+}
+
+// ── Upload file to backend, fall back to client-side parse ───────────────────
+async function handleUpload(input, importType){
+  const file=input.files[0]; if(!file) return;
+  const label = importType==='cow' ? 'Cow/Herd' : 'Grass/Paddock';
+  const arrayBuffer = await file.arrayBuffer();
+
+  // ── For cow uploads: check how many farms exist ────────────────────────────
+  if(importType === 'cow'){
+    try{
+      const fc = await fetch(apiBase()+'/farms/count');
+      if(fc.ok){
+        const fd = await fc.json();
+        if(fd.count > 1){
+          // Show farm-select modal before proceeding
+          _pendingUploadInput    = input;
+          _pendingUploadBuffer   = arrayBuffer;
+          _pendingUploadFilename = file.name;
+          _selectedFarmId        = null;
+          openFarmModal(fd.farms);
+          return;
+        }
+        // 0 or 1 farm — auto-assign handled server-side, fall through
+      }
+    }catch(e){ /* backend offline — fall through */ }
+  }
+
+  setStatus('\u23f3 Uploading '+file.name+' ('+label+')\u2026','var(--sky)');
+  await doUpload(arrayBuffer, file.name, importType, null);
+  input.value='';
+}
+
+async function doUpload(arrayBuffer, filename, importType, farmId){
+  // ── Try backend first ──────────────────────────────────────────────────────
+  try{
+    const headers = {
+      'Content-Type': 'application/octet-stream',
+      'X-Filename': filename,
+      'X-Import-Type': importType || 'auto',
+    };
+    if(farmId) headers['X-Farm-Id'] = String(farmId);
+    const r = await fetch(apiBase()+'/import/upload', {
+      method: 'POST',
+      headers,
+      body: arrayBuffer,
+    });
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||'HTTP '+r.status);}
+    const d=await r.json();
+    const parts=Object.entries(d.sheets||{}).map(([k,v])=>k+' '+v.upserted+'\u2191');
+    setStatus('\u2713 '+filename+' \u2014 '+parts.join(', '),'var(--accent)');
+    await loadFromBackend();
+    return;
+  }catch(backendErr){
+    // Backend offline or unreachable — fall through to client-side parse
+  }
+
+  // ── Client-side fallback using SheetJS ────────────────────────────────────
+  try{
+    setStatus('\u23f3 Parsing '+filename+' locally\u2026','var(--sky)');
+    const workbook = XLSX.read(arrayBuffer, {type:'array'});
+
+    // Column aliases → STATE field names
+    const COL_GRASS = {
+      name:['name','paddock_name','paddock'],
+      acres:['acres','area_ac','area'],
+      status:['status'],
+      breed:['breed','assigned_breed'],
+      grass:['grass','grass_height_cm','grass height (cm)','grass_cm'],
+      moisture:['moisture','soil_moisture_pct','soil moisture (%)','soil_moisture'],
+      temp:['temp','temperature_c','air_temp_c','temperature (°c)'],
+    };
+    const COL_COW = {
+      name:['name'],tag:['tag','tag_number','tag number'],
+      status:['status'],sex:['sex'],breed:['breed'],
+      weight:['weight','weight_lb','weight (lb)'],
+      height:['height','height_in','height (in)'],
+      bcs:['bcs','condition score (bcs)','body_condition_score'],
+      paddock:['paddock','paddock_name'],
+      birthDate:['birthdate','birth_date','date of birth'],
+      dam:['dam'],sire:['sire'],notes:['notes'],
+    };
+    function pick(row, aliases){
+      const lrow = {};
+      for(const k of Object.keys(row)) lrow[k.toLowerCase().trim()] = row[k];
+      for(const a of aliases){
+        const v = lrow[a.toLowerCase()];
+        if(v !== undefined && v !== null && v !== '') return String(v).trim();
+      }
+      return '';
+    }
+
+    function sheetToRows(ws){
+      return XLSX.utils.sheet_to_json(ws, {defval:''});
+    }
+
+    let paddocksLoaded=0, animalsLoaded=0;
+
+    for(const sheetName of workbook.SheetNames){
+      const key = sheetName.toLowerCase().trim();
+      const rows = sheetToRows(workbook.Sheets[sheetName]);
+      if(!rows.length) continue;
+
+      const isCow   = importType==='cow'   || ['animal','cow'].some(k=>key.includes(k));
+      const isGrass = importType==='grass' || ['paddock','grass','field','sensor'].some(k=>key.includes(k));
+
+      if(isCow && !isGrass){
+        // Animal sheet
+        const animals = rows.map(r=>({
+          name:      pick(r, COL_COW.name),
+          tag:       pick(r, COL_COW.tag),
+          animalType:'Cattle',
+          status:    pick(r, COL_COW.status)||'Active',
+          sex:       pick(r, COL_COW.sex),
+          breed:     pick(r, COL_COW.breed),
+          weight:    parseFloat(pick(r, COL_COW.weight))||0,
+          height:    parseFloat(pick(r, COL_COW.height))||0,
+          bcs:       parseFloat(pick(r, COL_COW.bcs))||0,
+          paddock:   pick(r, COL_COW.paddock),
+          birthDate: pick(r, COL_COW.birthDate),
+          dam:       pick(r, COL_COW.dam),
+          sire:      pick(r, COL_COW.sire),
+          notes:     pick(r, COL_COW.notes),
+        })).filter(a=>a.name||a.tag);
+        if(animals.length){ STATE.animals = animals; animalsLoaded += animals.length; }
+
+      } else {
+        // Paddock/grass sheet
+        const paddocks = rows.map(r=>({
+          id:       (pick(r, COL_GRASS.name)||'?').toUpperCase().replace(/\s+/g,'_').substring(0,1),
+          name:     pick(r, COL_GRASS.name),
+          acres:    parseFloat(pick(r, COL_GRASS.acres))||0,
+          status:   (pick(r, COL_GRASS.status)||'ready').toLowerCase(),
+          breed:    pick(r, COL_GRASS.breed),
+          grass:    parseFloat(pick(r, COL_GRASS.grass))||0,
+          moisture: parseFloat(pick(r, COL_GRASS.moisture))||0,
+          temp:     parseFloat(pick(r, COL_GRASS.temp))||0,
+          restLeft: 0, daysSince: 0, pgr: 0, timestamp: '',
+        })).filter(p=>p.name);
+        if(paddocks.length){ STATE.paddocks = paddocks; paddocksLoaded += paddocks.length; }
+      }
+    }
+
+    const parts = [
+      paddocksLoaded ? paddocksLoaded+' paddocks' : '',
+      animalsLoaded  ? animalsLoaded+' animals'   : '',
+    ].filter(Boolean);
+
+    if(!parts.length) throw new Error('No recognisable data found in '+filename);
+
+    STATE.loaded = true;
+    setStatus('\u2713 '+filename+' (local) \u2014 '+parts.join(', '),'var(--accent)');
+    renderAll();
+    }catch(e){
+    setStatus('\u2717 Upload failed: '+e.message,'var(--red)');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// FARM MODAL — shown when multiple farms exist and a cow file is uploaded
+// ════════════════════════════════════════════════════════════════
+
+function openFarmModal(farms){
+  _selectedFarmId = farms.length === 1 ? farms[0].id : null;
+  const list = document.getElementById('farmModalList');
+  list.innerHTML = farms.map(f=>`
+    <div class="modal-farm-opt${_selectedFarmId===f.id?' selected':''}" data-id="${f.id}" onclick="selectModalFarm(${f.id})">
+      <div style="font-size:22px">🏡</div>
+      <div>
+        <div class="modal-farm-opt-name">${f.name}</div>
+        <div class="modal-farm-opt-addr">${f.address}</div>
+      </div>
+    </div>`).join('');
+  document.getElementById('farmSelectModal').style.display = 'flex';
+}
+
+function selectModalFarm(id){
+  _selectedFarmId = id;
+  document.querySelectorAll('.modal-farm-opt').forEach(el=>{
+    el.classList.toggle('selected', parseInt(el.dataset.id) === id);
+  });
+}
+
+async function closeFarmModal(confirmed){
+  document.getElementById('farmSelectModal').style.display = 'none';
+  if(!confirmed || !_pendingUploadBuffer){ _pendingUploadInput&&(_pendingUploadInput.value=''); return; }
+  if(!_selectedFarmId){
+    setStatus('\u2717 Please select a farm before importing','var(--amber)');
+    return;
+  }
+  setStatus('\u23f3 Uploading '+_pendingUploadFilename+' \u2192 farm #'+_selectedFarmId+'\u2026','var(--sky)');
+  await doUpload(_pendingUploadBuffer, _pendingUploadFilename, 'cow', _selectedFarmId);
+  if(_pendingUploadInput) _pendingUploadInput.value='';
+  _pendingUploadInput = _pendingUploadBuffer = _pendingUploadFilename = null;
+}
+
+// ════════════════════════════════════════════════════════════════
+// FARM CRUD — Settings panel
+// ════════════════════════════════════════════════════════════════
+
+function renderFarmCards(){
+  const grid = document.getElementById('farmCardsGrid');
+  if(!grid) return;
+  if(!STATE.farms.length){
+    grid.innerHTML='<div style="color:var(--muted);font-family:var(--font-mono);font-size:11px;padding:16px 0">No farms saved yet — add one below.</div>';
+    return;
+  }
+  grid.innerHTML = STATE.farms.map(f=>`
+    <div class="farm-card">
+      <div style="font-size:28px;margin-bottom:8px">🏡</div>
+      <div class="farm-card-name">${f.name}</div>
+      <div class="farm-card-addr">${f.street}<br>${f.city}, ${f.state}</div>
+      <div class="farm-card-id">Farm ID: ${f.id}</div>
+      <div class="farm-card-actions">
+        <button class="farm-btn farm-btn-edit" onclick="editFarm(${f.id})">Edit</button>
+        <button class="farm-btn farm-btn-del" onclick="deleteFarm(${f.id})">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+async function saveFarm(){
+  const id     = document.getElementById('farmEditId').value;
+  const name   = document.getElementById('farmName').value.trim();
+  const street = document.getElementById('farmStreet').value.trim();
+  const city   = document.getElementById('farmCity').value.trim();
+  const state  = document.getElementById('farmState').value.trim();
+  const status = document.getElementById('farmStatus');
+
+  if(!name||!street||!city||!state){
+    status.textContent='All fields are required.'; status.style.color='var(--red)'; return;
+  }
+  status.textContent='\u23f3 Saving\u2026'; status.style.color='var(--muted)';
+
+  try{
+    const method = id ? 'PATCH' : 'POST';
+    const url    = id ? apiBase()+'/farms/'+id : apiBase()+'/farms';
+    const r = await fetch(url,{
+      method, headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, street, city, state}),
+    });
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||'HTTP '+r.status);}
+    const farm = await r.json();
+    status.textContent='\u2713 Farm saved: '+farm.name; status.style.color='var(--accent)';
+    clearFarmForm();
+    await refreshFarms();
+  }catch(e){
+    status.textContent='\u2717 '+e.message; status.style.color='var(--red)';
+  }
+}
+
+function editFarm(id){
+  const f = STATE.farms.find(x=>x.id===id); if(!f) return;
+  document.getElementById('farmEditId').value  = f.id;
+  document.getElementById('farmName').value    = f.name;
+  document.getElementById('farmStreet').value  = f.street;
+  document.getElementById('farmCity').value    = f.city;
+  document.getElementById('farmState').value   = f.state;
+  document.getElementById('farmFormTitle').textContent = 'Edit Farm';
+  document.getElementById('farmCancelBtn').style.display = 'inline-block';
+  document.getElementById('farmStatus').textContent = '';
+  document.getElementById('farmForm').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function cancelFarmEdit(){
+  clearFarmForm();
+  document.getElementById('farmStatus').textContent = '';
+}
+
+function clearFarmForm(){
+  document.getElementById('farmEditId').value = '';
+  document.getElementById('farmName').value   = '';
+  document.getElementById('farmStreet').value = '';
+  document.getElementById('farmCity').value   = '';
+  document.getElementById('farmState').value  = '';
+  document.getElementById('farmFormTitle').textContent = 'Add New Farm';
+  document.getElementById('farmCancelBtn').style.display = 'none';
+}
+
+async function deleteFarm(id){
+  const f = STATE.farms.find(x=>x.id===id);
+  if(!confirm(`Delete farm "${f?.name}"?\n\nAnimals assigned to this farm will be unlinked.`)) return;
+  try{
+    const r = await fetch(apiBase()+'/farms/'+id, {method:'DELETE'});
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||'HTTP '+r.status);}
+    await refreshFarms();
+    document.getElementById('farmStatus').textContent = '\u2713 Farm deleted.';
+    document.getElementById('farmStatus').style.color = 'var(--accent)';
+  }catch(e){
+    document.getElementById('farmStatus').textContent = '\u2717 '+e.message;
+    document.getElementById('farmStatus').style.color = 'var(--red)';
+  }
+}
+
+async function refreshFarms(){
+  try{
+    const r = await fetch(apiBase()+'/farms');
+    if(!r.ok) return;
+    const farms = await r.json();
+    STATE.farms = farms.map(f=>({
+      id:f.id, name:f.name, street:f.street, city:f.city, state:f.state,
+      address:`${f.street}, ${f.city}, ${f.state}`,
+    }));
+    renderFarmCards();
+  }catch(e){ /* backend offline */ }
+}
+
+// ── Load all data from backend ────────────────────────────────────────────────
+async function loadFromBackend(){
+  setStatus('\u23f3 Loading from backend\u2026','var(--sky)');
+  try{
+    const r=await fetch(apiBase()+'/dashboard/export');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    mapBackendToState(d);
+    const parts=[
+      STATE.paddocks.length+' paddocks',
+      STATE.weather.length ? STATE.weather.length+' weather rows' : '',
+      STATE.animals.length ? STATE.animals.length+' animals' : '',
+    ].filter(Boolean).join(' \u00b7 ');
+    setStatus('\u2713 '+parts,'var(--accent)');
+    STATE.loaded=true;
+    renderAll();
+  }catch(e){
+    setStatus('Backend offline \u2014 start the server and click Load \u21bb','var(--muted)');
+  }
+}
+
+// ── Map backend field names to STATE ─────────────────────────────────────────
+function mapBackendToState(d){
+  const pkIdToName=Object.fromEntries((d.paddocks||[]).map(p=>[p.id,p.name]));
+  const farmIdToName=Object.fromEntries((d.farms||[]).map(f=>[f.id, f.name]));
+
+  STATE.paddocks=(d.paddocks||[]).map(p=>{
+    const r=p.latest_reading||{};
+    return{
+      id:       (p.name||String(p.id||'?')).toUpperCase().replace(/\s+/g,'_').substring(0,1)||'?',
+      name:     p.name||'',
+      acres:    p.acres||0,
+      grass:    r.grass_height_cm||0,
+      moisture: r.soil_moisture||0,
+      temp:     r.air_temp_c||0,
+      status:   (p.status||'unknown').toLowerCase(),
+      breed:    p.assigned_breed||'',
+      timestamp:r.timestamp||'',
+      restLeft: p.latest_prediction ? (p.latest_prediction.days_to_ready||0) : 0,
+      daysSince:0,
+      pgr:      p.latest_prediction ? (p.latest_prediction.pgr_cm_day||0) : 0,
+    };
+  });
+
+  const hist=(d.weather_history||[]).map(w=>({
+    date:w.record_date||'',temp:w.temperature_c||0,precip:w.precipitation_mm||0,
+    wind:w.wind_ms||0,humidity:w.humidity_pct||0,note:w.description||'',
+  }));
+  const fc=(d.weather_forecast||[]).map(w=>({
+    date:w.record_date||'',temp:w.temperature_c||0,precip:w.precipitation_mm||0,
+    wind:w.wind_ms||0,humidity:w.humidity_pct||0,
+    note:(w.description||'forecast').replace('(forecast)','').trim()+' (forecast)',
+  }));
+  STATE.weather=[...hist,...fc];
+
+
+  STATE.animals=(d.animals||[]).map(a=>({
+    name:a.name||'',animalType:a.animal_type||'Cattle',tag:a.tag_number||'',
+    status:a.status||'Active',paddock:pkIdToName[a.paddock_id]||'',
+    farm_id:a.farm_id||null,farmName:farmIdToName[a.farm_id]||'',
+    sex:a.sex||'',breed:a.breed||'',coloring:a.coloring||'',
+    weight:a.weight_lb||0,height:a.height_in||0,framescore:a.framescore||0,
+    bcs:a.bcs||0,lastMeasured:a.last_measured||'',age:a.age_yr||0,
+    birthDate:a.birth_date?a.birth_date.substring(0,10):'',
+    dam:a.dam||'',sire:a.sire||'',offspring:a.offspring||'',notes:a.notes||'',
+  }));
+
+  STATE.farms=(d.farms||[]).map(f=>({
+    id:f.id, name:f.name, street:f.street, city:f.city, state:f.state,
+    address:`${f.street}, ${f.city}, ${f.state}`,
+  }));
+
+  renderFarmCards();
+}
+
+
+
+
+
+// ════════════════════════════════════════════════════════════════
+// OPENWEATHERMAP — live fetch + aerial map
+// ════════════════════════════════════════════════════════════════
+
+const OWM_ICON_MAP = {
+  '01d':'☀️','01n':'🌙',
+  '02d':'🌤️','02n':'🌤️',
+  '03d':'☁️','03n':'☁️',
+  '04d':'☁️','04n':'☁️',
+  '09d':'🌧️','09n':'🌧️',
+  '10d':'🌦️','10n':'🌦️',
+  '11d':'⛈️','11n':'⛈️',
+  '13d':'❄️','13n':'❄️',
+  '50d':'🌫️','50n':'🌫️',
+};
+
+function wxIcon(code){ return OWM_ICON_MAP[code] || '🌤️'; }
+
+async function fetchWeather(){
+  const loc  = document.getElementById('wxLocation').value.trim();
+  const stat = document.getElementById('wxStatus');
+
+  if(!loc){ stat.textContent='Enter a city name'; stat.style.color='var(--amber)'; return; }
+
+  stat.textContent='⏳ Fetching…'; stat.style.color='var(--muted)';
+
+  try{
+    // Route through the backend — API key stays in .env
+    const curResp = await fetch(
+      apiBase()+'/weather/current?location='+encodeURIComponent(loc)
+    );
+    if(!curResp.ok){
+      const err = await curResp.json().catch(()=>({}));
+      throw new Error(err.detail || 'HTTP '+curResp.status);
+    }
+    const cur = await curResp.json();
+
+    const fcResp = await fetch(
+      apiBase()+'/weather/forecast?location='+encodeURIComponent(loc)
+    );
+    const fcData = fcResp.ok ? await fcResp.json() : null;
+
+    stat.textContent = '✓ ' + cur.name + ', ' + cur.sys.country;
+    stat.style.color = 'var(--accent)';
+
+    renderLiveWeather(cur, fcData);
+    renderAerialMap(cur.coord.lat, cur.coord.lon, cur.name + ', ' + cur.sys.country);
+
+  }catch(e){
+    stat.textContent = '✗ ' + e.message;
+    stat.style.color = 'var(--red)';
+  }
+}
+
+function renderLiveWeather(cur, fcData){
+  // Show the live row
+  document.getElementById('wxLiveRow').style.display = 'grid';
+
+  // Current conditions card
+  const icon  = wxIcon(cur.weather[0].icon);
+  const tempF = Math.round(cur.main.temp);
+  const desc  = cur.weather[0].description;
+  const name  = cur.name + ', ' + cur.sys.country;
+  const feels = Math.round(cur.main.feels_like);
+  const humid = cur.main.humidity;
+  const wind  = Math.round(cur.wind.speed);
+  const vis   = cur.visibility ? (cur.visibility / 1000).toFixed(1) + ' km' : '—';
+  const press = cur.main.pressure + ' hPa';
+
+  document.getElementById('wxIconBig').textContent  = icon;
+  document.getElementById('wxTempBig').textContent  = tempF + '°F';
+  document.getElementById('wxDescBig').textContent  = desc;
+  document.getElementById('wxLocBig').textContent   = name;
+  document.getElementById('wxUpdatedBadge').textContent = 'updated ' + new Date().toLocaleTimeString();
+  document.getElementById('wxStatGrid').innerHTML = `
+    <div class="wx-stat">Feels like <b>${feels}°F</b></div>
+    <div class="wx-stat">Humidity <b>${humid}%</b></div>
+    <div class="wx-stat">Wind <b>${wind} mph</b></div>
+    <div class="wx-stat">Pressure <b>${press}</b></div>
+    <div class="wx-stat">Visibility <b>${vis}</b></div>
+    <div class="wx-stat">Cloud cover <b>${cur.clouds.all}%</b></div>
+  `;
+
+  // Merge live data into STATE.weather for forecast strip + chart
+  if(fcData && fcData.list){
+    // Group 3-hour slots into days
+    const daily = {};
+    fcData.list.forEach(item => {
+      const d = item.dt_txt.substring(0,10);
+      if(!daily[d]) daily[d] = {temps:[],precips:[],icons:[],winds:[],note:item.weather[0].description};
+      daily[d].temps.push(item.main.temp);
+      daily[d].precips.push((item.rain && item.rain['3h']) || 0);
+      daily[d].icons.push(item.weather[0].icon);
+      daily[d].winds.push(item.wind.speed);
+    });
+
+    const today = new Date().toISOString().substring(0,10);
+    // Current day from live data
+    const liveRows = [{
+      date: today,
+      temp: cur.main.temp,
+      precip: (cur.rain && cur.rain['1h']) || 0,
+      wind: cur.wind.speed,
+      humidity: cur.main.humidity,
+      note: cur.weather[0].description,
+      icon: cur.weather[0].icon,
+    }];
+    // Forecast days
+    Object.entries(daily).filter(([d]) => d > today).slice(0,7).forEach(([d, v]) => {
+      const avgT  = v.temps.reduce((s,x) => s+x, 0) / v.temps.length;
+      const totP  = v.precips.reduce((s,x) => s+x, 0);
+      const avgW  = v.winds.reduce((s,x) => s+x, 0) / v.winds.length;
+      const icon  = v.icons[Math.floor(v.icons.length/2)];
+      liveRows.push({ date:d, temp:avgT, precip:totP*0.0394, wind:avgW, humidity:0, note:v.note+' (forecast)', icon });
+    });
+
+    STATE.weather = liveRows.map(r => ({
+      date:     r.date,
+      temp:     +r.temp.toFixed(1),
+      precip:   +r.precip.toFixed(3),
+      wind:     +r.wind.toFixed(1),
+      humidity: r.humidity || 0,
+      note:     r.note,
+      icon:     r.icon,
+    }));
+    // Re-render forecast strip and weather chart
+    renderForecastLive(STATE.weather);
+    renderWeatherChartLive(STATE.weather);
+  }
+}
+
+function renderForecastLive(rows){
+  const today = rows[0];
+  const fc    = rows.slice(1);
+  const all   = [today, ...fc].slice(0, 8);
+  document.getElementById('forecastBadge').textContent = fc.length + '-day forecast';
+  document.getElementById('forecastStrip').innerHTML = all.map((r, i) => {
+    const label = i === 0 ? 'Today' :
+      (() => { try{ return new Date(r.date+'T12:00').toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'}); }catch(e){ return r.date.substring(5); } })();
+    const ico = (r.icon ? (OWM_ICON_MAP[r.icon] || '🌤️') : weatherIcon(r.note));
+    const mm  = r.precip * 25.4; // inches back to mm for display
+    return `<div class="fc-day${i===0?' today':''}">
+      <div class="fc-date">${label}</div>
+      <div class="fc-icon">${ico}</div>
+      <div class="fc-temp">${Math.round(r.temp)}°F</div>
+      <div class="fc-precip">${r.precip.toFixed(2)}in</div>
+      <div class="fc-wind">${r.wind.toFixed(1)} mph</div>
+    </div>`;
+  }).join('');
+}
+
+function renderWeatherChartLive(rows){
+  const hist = rows.filter(r => !r.note.includes('forecast'));
+  const fc   = rows.filter(r =>  r.note.includes('forecast'));
+  const all  = [...hist, ...fc];
+  destroyChart('weatherChart');
+  charts.weatherChart = new Chart(document.getElementById('weatherChart'), {
+    type: 'bar',
+    data: {
+      labels: all.map(r => r.date.substring(5)),
+      datasets: [
+        { type:'line', data: all.map(r => r.temp),   borderColor:'#b5600a', backgroundColor:'rgba(181,96,10,0.05)', tension:0.4, fill:true, pointRadius:2, borderWidth:2, yAxisID:'y',
+          segment:{ borderDash: ctx => ctx.p0DataIndex >= hist.length-1 ? [4,3] : undefined } },
+        { data: all.map(r => r.precip), backgroundColor: all.map((_,i) => i < hist.length ? 'rgba(26,92,122,0.55)' : 'rgba(26,92,122,0.22)'), borderRadius:2, yAxisID:'y1' },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{color:'#9a8e7a',font:{size:10},maxTicksLimit:8,autoSkip:true}, grid:{display:false} },
+        y:{ ticks:{color:'#9a8e7a',font:{size:10},callback:v=>v+'°F'}, grid:{color:'rgba(60,50,30,0.05)'} },
+        y1:{ position:'right', ticks:{color:'#1a5c7a',font:{size:10},callback:v=>v+'in'}, grid:{display:false} },
+      }
+    }
+  });
+}
+
+function renderAerialMap(lat, lon, label){
+  const zoom = 13;
+  // OpenStreetMap embed via openstreetmap.org
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.05},${lat-0.04},${lon+0.05},${lat+0.04}&layer=hot&marker=${lat},${lon}`;
+  const frame = document.getElementById('aerialFrame');
+  const placeholder = document.getElementById('aerialPlaceholder');
+  const lbl = document.getElementById('aerialLabel');
+
+  frame.src = src;
+  frame.style.display = 'block';
+  placeholder.style.display = 'none';
+  lbl.textContent = label;
+  lbl.style.display = 'block';
+  document.getElementById('wxMapBadge').textContent = 'OpenStreetMap · ' + lat.toFixed(4) + ', ' + lon.toFixed(4);
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// RENDER ENGINE — reads STATE, drives all charts + tables
+// ════════════════════════════════════════════════════════════════
+
+const BCOLORS=['#3d6b2e','#b5600a','#1a5c7a','#555555','#7c4d00','#9e2b2b','#4a7a6b','#7a4a2e'];
+const STATUS_COL={ready:'#3d6b2e',grazing:'#1a5c7a',resting:'#b5600a',hay:'#7c4d00',unknown:'#888'};
+const STATUS_LBL={ready:'Ready to graze',grazing:'Currently grazed',resting:'Resting',hay:'Hay reserve',unknown:'Unknown'};
+
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+
+function weatherIcon(note){
+  const n=(note||'').toLowerCase();
+  if(n.includes('sunny')) return '☀️';
+  if(n.includes('clear')) return '🌤️';
+  if(n.includes('partly')) return '⛅';
+  if(n.includes('cloud')) return '☁️';
+  if(n.includes('light rain')) return '🌦️';
+  if(n.includes('rain')) return '🌧️';
+  if(n.includes('clearing')) return '🌤️';
+  return '🌫️';
+}
+
+function renderAll(){
+  updateKPIs();
+  renderOverview();
+  renderPaddocks();
+  renderAnimals();
+  renderFarmCards();
+}
+
+function updateKPIs(){
+  const p=STATE.paddocks,w=STATE.weather,a=STATE.animals;
+  if(!p.length) return;
+  const ready=p.filter(x=>x.status==='ready').length;
+  const grazing=p.filter(x=>x.status==='grazing').length;
+  document.getElementById('k-paddocks').innerHTML=p.length+'<span class="kpi-unit"> paddocks</span>';
+  document.getElementById('k-paddocks-sub').textContent=grazing+' grazing · '+ready+' ready';
+  const avgGrass=(p.reduce((s,x)=>s+x.grass,0)/p.length).toFixed(1);
+  document.getElementById('k-grass').innerHTML=avgGrass+'<span class="kpi-unit"> in</span>';
+  document.getElementById('k-grass-sub').textContent=ready+' paddocks ready to graze';
+  const avgMoist=Math.round(p.reduce((s,x)=>s+x.moisture,0)/p.length);
+  document.getElementById('k-moisture').innerHTML=avgMoist+'<span class="kpi-unit"> %</span>';
+  document.getElementById('k-moisture-sub').textContent=p.filter(x=>x.moisture<22).length?p.filter(x=>x.moisture<22).length+' below 22% — watch':'Moisture levels ok';
+  document.getElementById('k-animals').innerHTML=a.length+'<span class="kpi-unit"> animals</span>';
+  document.getElementById('k-animals-sub').textContent=a.filter(x=>x.sex==='Female').length+'F · '+a.filter(x=>x.sex==='Male').length+'M';
+}
+
+function renderOverview(){
+  const p=STATE.paddocks,w=STATE.weather;
+  if(!p.length){document.getElementById('overviewEmpty').style.display='block';document.getElementById('overviewContent').style.display='none';return;}
+  document.getElementById('overviewEmpty').style.display='none';
+  document.getElementById('overviewContent').style.display='block';
+  document.getElementById('paddockCountBadge').textContent=p.length+' paddocks';
+
+  // Suggestions
+  const readyP=p.filter(x=>x.status==='ready');
+  const restingP=p.filter(x=>x.status==='resting');
+  const dryP=p.filter(x=>x.moisture<25);
+  const hist=w.filter(x=>!x.note.includes('forecast'));
+  const lastW=hist.length?hist[hist.length-1]:null;
+  const suggs=[];
+  if(readyP.length) suggs.push({ico:'🌱',body:`Move herd to <strong>${readyP.map(x=>x.name||x.id).join(', ')}</strong> — grass at ${readyP[0].grass}in, optimal grazing window.`,sub:readyP.length+' paddock(s) ready'});
+  if(restingP.length) suggs.push({ico:'🔄',body:`Keep <strong>${restingP.map(x=>x.name||x.id).join(', ')}</strong> resting — below 2.4in target entry height.`,sub:'Allow 28–32 more days per USDA cool-season protocol'});
+  if(dryP.length) suggs.push({ico:'💧',body:`<strong>${dryP.map(x=>x.name||x.id).join(', ')}</strong> moisture below 25% — monitor closely.`,sub:'Irrigation threshold: below 20%'});
+  if(lastW) suggs.push({ico:'🌡️',body:`<strong>${lastW.temp}°F</strong> is ${lastW.temp>=12&&lastW.temp<=18?'near-ideal':'outside ideal range'} for cool-season grass growth.`,sub:'Growth rate peaks 54–64°F for ryegrass & fescue'});
+  if(!suggs.length) suggs.push({ico:'✅',body:'All paddocks in good condition.',sub:'No urgent actions required'});
+  document.getElementById('suggestionsGrid').innerHTML=suggs.map(s=>`<div class="sug"><div class="sug-ico">${s.ico}</div><div><div class="sug-body">${s.body}</div><div class="sug-sub">${s.sub}</div></div></div>`).join('');
+
+  // Forecast
+  renderForecast(w);
+
+  // Grass multi-line
+  const days14=Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()-13+i);return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});});
+  destroyChart('grassMulti');
+  const grassDS=p.slice(0,6).map((pk,i)=>{
+    const data=Array.from({length:14},(_,j)=>{
+      const h=pk.grass-1.2*(14-j-14)+(Math.sin(j*0.7+i)*0.3);
+      return +Math.max(0,Math.min(5,h)).toFixed(2);
+    });
+    return{data,borderColor:BCOLORS[i]+'cc',backgroundColor:BCOLORS[i]+'0d',tension:0.4,fill:true,pointRadius:2,borderWidth:2,label:pk.name||pk.id};
+  });
+  charts.grassMulti=new Chart(document.getElementById('grassMulti'),{type:'line',data:{labels:days14,datasets:grassDS},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#9a8e7a',font:{size:10},maxTicksLimit:7,autoSkip:true},grid:{color:'rgba(60,50,30,0.05)'}},y:{ticks:{color:'#9a8e7a',font:{size:10},callback:v=>v+'in'},grid:{color:'rgba(60,50,30,0.05)'},min:0,max:5}}}});
+  document.getElementById('grassLegend').innerHTML=p.slice(0,6).map((pk,i)=>`<div class="leg"><div class="lsq" style="background:${BCOLORS[i]}"></div>${pk.name||pk.id}</div>`).join('');
+
+  // Weather chart
+  const histW=w.filter(x=>!x.note.includes('forecast'));
+  const wData=histW.length?histW:Array.from({length:14},()=>({date:'',temp:16,precip:0}));
+  destroyChart('weatherChart');
+  charts.weatherChart=new Chart(document.getElementById('weatherChart'),{type:'bar',data:{labels:wData.map(x=>x.date.substring(5)||''),datasets:[{type:'line',data:wData.map(x=>x.temp),borderColor:'#b5600a',backgroundColor:'rgba(181,96,10,0.05)',tension:0.4,fill:true,pointRadius:2,borderWidth:2,yAxisID:'y'},{data:wData.map(x=>x.precip),backgroundColor:'rgba(26,92,122,0.45)',borderRadius:2,yAxisID:'y1'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#9a8e7a',font:{size:10},maxTicksLimit:7,autoSkip:true},grid:{display:false}},y:{ticks:{color:'#9a8e7a',font:{size:10},callback:v=>v+'°F'},grid:{color:'rgba(60,50,30,0.05)'}},y1:{position:'right',ticks:{color:'#1a5c7a',font:{size:10},callback:v=>v+'in'},grid:{display:false}}}}});
+
+  // Paddock bar
+  destroyChart('paddockBar');
+  charts.paddockBar=new Chart(document.getElementById('paddockBar'),{type:'bar',data:{labels:p.map(x=>x.id),datasets:[{data:p.map(x=>x.grass),backgroundColor:p.map(x=>(STATUS_COL[x.status]||'#888')+'cc'),borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#9a8e7a',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#9a8e7a',font:{size:10},callback:v=>v+'in'},grid:{color:'rgba(60,50,30,0.05)'},min:0,max:5}}},plugins:[{id:'tgt',beforeDraw(ch){const{ctx,chartArea:{left,right},scales:{y}}=ch;const y6=y.getPixelForValue(2.4),y8=y.getPixelForValue(3.1);ctx.save();ctx.fillStyle='rgba(61,107,46,0.07)';ctx.fillRect(left,y8,right-left,y6-y8);ctx.strokeStyle='rgba(61,107,46,0.35)';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(left,y6);ctx.lineTo(right,y6);ctx.stroke();ctx.beginPath();ctx.moveTo(left,y8);ctx.lineTo(right,y8);ctx.stroke();ctx.restore();}}]});
+}
+
+function renderForecast(w){
+  const fc=w.filter(x=>x.note.includes('forecast'));
+  const hist=w.filter(x=>!x.note.includes('forecast'));
+  const today=hist.length?hist[hist.length-1]:null;
+  const rows=[today,...fc].filter(Boolean).slice(0,8);
+  if(!rows.length){document.getElementById('forecastStrip').innerHTML='<div style="color:var(--muted);font-family:var(--font-mono);font-size:11px;padding:20px 0">No forecast data — load XLSX with Weather sheet</div>';return;}
+  document.getElementById('forecastBadge').textContent=fc.length+'-day forecast';
+  document.getElementById('forecastStrip').innerHTML=rows.map((r,i)=>{
+    let label;
+    if(i===0) label='Today';
+    else{try{label=new Date(r.date+'T00:00').toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'});}catch(e){label=r.date.substring(5)||'';}}
+    return`<div class="fc-day${i===0?' today':''}"><div class="fc-date">${label}</div><div class="fc-icon">${weatherIcon(r.note)}</div><div class="fc-temp">${(r.temp||0).toFixed(0)}°F</div><div class="fc-precip">${(r.precip||0).toFixed(2)}in</div><div class="fc-wind">${(r.wind||0).toFixed(1)} m/s</div></div>`;
+  }).join('');
+}
+
+
+function renderPaddocks(){
+  const p=STATE.paddocks;
+  if(!p.length){document.getElementById('paddocksEmpty').style.display='block';document.getElementById('paddocksContent').style.display='none';return;}
+  document.getElementById('paddocksEmpty').style.display='none';
+  document.getElementById('paddocksContent').style.display='block';
+  document.getElementById('paddockTimestamp').textContent=p.find(x=>x.timestamp)?.timestamp||new Date().toLocaleString();
+  document.getElementById('paddockTbody').innerHTML=p.map(pp=>{
+    const col=STATUS_COL[pp.status]||'#888';
+    const gPct=Math.round(Math.min(100,(pp.grass||0)/5*100));
+    const mPct=Math.round(Math.min(100,pp.moisture/60*100));
+    return`<tr><td style="font-weight:500;font-size:13px;color:${col}">${pp.id}</td><td>${pp.name}</td><td style="color:var(--muted)">${pp.acres||'—'} ac</td><td>${(pp.grass||0).toFixed(1)} in</td><td><div class="mbar"><div class="bar-bg"><div class="bar-fill" style="width:${gPct}%;background:${col}"></div></div><span style="font-size:9px;color:var(--muted)">${gPct}%</span></div></td><td>${(pp.moisture||0).toFixed(0)}%</td><td><div class="mbar"><div class="bar-bg"><div class="bar-fill" style="width:${mPct}%;background:#1a5c7a"></div></div><span style="font-size:9px;color:var(--muted)">${mPct}%</span></div></td><td>${pp.temp?(pp.temp.toFixed(0)+'°F'):'—'}</td><td style="color:var(--muted)">${pp.breed||'—'}</td><td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:5px"></span><span style="font-size:10px;color:${col}">${STATUS_LBL[pp.status]||pp.status}</span></td></tr>`;
+  }).join('');
+  const rate=1.2;
+  const futureDays=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});});
+  destroyChart('predChart');
+  charts.predChart=new Chart(document.getElementById('predChart'),{type:'line',data:{labels:futureDays,datasets:p.slice(0,5).map((pk,i)=>({data:Array.from({length:7},(_,j)=>+(Math.min(5,pk.grass+(j+1)*rate*(pk.status==='resting'?1.1:0.8))).toFixed(2)),borderColor:BCOLORS[i],borderDash:[5,3],backgroundColor:BCOLORS[i]+'08',tension:0.4,fill:true,pointRadius:2,borderWidth:2,label:pk.name||pk.id}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{color:'#9a8e7a',font:{size:10},boxWidth:10,padding:7}}},scales:{x:{ticks:{color:'#9a8e7a',font:{size:10}},grid:{color:'rgba(60,50,30,0.05)'}},y:{ticks:{color:'#9a8e7a',font:{size:10},callback:v=>v+'in'},grid:{color:'rgba(60,50,30,0.05)'},min:0,max:5}}}});
+  destroyChart('rotChart');
+  charts.rotChart=new Chart(document.getElementById('rotChart'),{type:'bar',data:{labels:p.map(x=>x.id),datasets:[{data:p.map(x=>x.status==='resting'?x.restLeft:0),backgroundColor:p.map(x=>x.status==='resting'?'rgba(181,96,10,0.7)':'rgba(61,107,46,0.2)'),borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#9a8e7a',font:{size:11}},grid:{display:false}},y:{ticks:{color:'#9a8e7a',font:{size:10},callback:v=>v+' d'},grid:{color:'rgba(60,50,30,0.05)'},min:0,max:35,title:{display:true,text:'Rest days remaining (target: 30)',color:'#9a8e7a',font:{size:9}}}}},plugins:[{id:'rl',afterDraw(ch){const{ctx,scales:{y}}=ch;const meta=ch.getDatasetMeta(0);p.forEach((pp,i)=>{if(pp.status!=='resting'){const bar=meta.data[i];const col=STATUS_COL[pp.status]||'#888';ctx.fillStyle=col;ctx.font='bold 8px IBM Plex Mono,monospace';ctx.textAlign='center';ctx.fillText(pp.status.toUpperCase(),bar.x,y.getPixelForValue(1.2));}});}}]});
+}
+
+function bcsBar(bcs){
+  const total=9;const filled=Math.round(bcs*1.8);
+  const cls=bcs<2?'low':bcs<2.5||bcs>4?'warn':'filled';
+  return`<div class="bcs-bar">${Array.from({length:total},(_,i)=>`<div class="bcs-seg${i<filled?' '+cls:''}"></div>`).join('')}</div>`;
+}
+function sexColor(sex){
+  if(sex==='Female') return{bg:'#FFF0F5',border:'#e8a0b4',text:'#7c2448',icon:'♀'};
+  if(sex==='Male')   return{bg:'#F0F5FF',border:'#a0b8e8',text:'#1a3a7c',icon:'♂'};
+  return{bg:'#F5F5F0',border:'#ccc',text:'#555',icon:'?'};
+}
+function statusPillStyle(status){
+  const s={Active:{bg:'rgba(61,107,46,0.1)',border:'rgba(61,107,46,0.3)',text:'#3d6b2e'},Sick:{bg:'rgba(158,43,43,0.1)',border:'rgba(158,43,43,0.3)',text:'#9e2b2b'},Sold:{bg:'rgba(85,85,85,0.1)',border:'rgba(85,85,85,0.3)',text:'#555'},Deceased:{bg:'rgba(60,50,30,0.1)',border:'rgba(60,50,30,0.3)',text:'#333'},Weaning:{bg:'rgba(181,96,10,0.1)',border:'rgba(181,96,10,0.3)',text:'#b5600a'}};
+  return s[status]||{bg:'rgba(85,85,85,0.1)',border:'#ccc',text:'#555'};
+}
+function field(label,val,empty='—'){
+  const v=val&&String(val).trim()&&String(val)!=='0'&&String(val)!=='NaN'?String(val):null;
+  return`<div class="ac-field"><div class="ac-field-lbl">${label}</div><div class="ac-field-val${v?'':' empty'}">${v||empty}</div></div>`;
+}
+function buildAnimalCard(a){
+  const sx=sexColor(a.sex);
+  const sp=statusPillStyle(a.status);
+  const col='#3d6b2e';
+  const ageStr=a.age?a.age+' yr':'—';
+  const bcsStr=a.bcs?a.bcs.toFixed(1)+' / 5':'—';
+  return`<div class="animal-card" data-name="${(a.name||'').toLowerCase()}" data-tag="${(a.tag||'').toLowerCase()}" data-breed="${(a.breed||'').toLowerCase()}" data-sex="${a.sex||''}" data-status="${a.status||''}" data-paddock="${a.paddock||''}" data-weight="${a.weight||0}">
+  <div class="ac-top"><div class="ac-avatar" style="background:${sx.bg};border:1px solid ${sx.border}"><span style="font-size:24px">🐄</span></div>
+  <div style="flex:1;min-width:0"><div class="ac-name">${a.name}</div><div class="ac-tag">${a.tag||'No tag'} · ${a.breed||'Unknown breed'}</div>
+  <div class="ac-status-row"><span class="ac-pill" style="background:${sp.bg};border-color:${sp.border};color:${sp.text}">${a.status||'Active'}</span><span class="ac-pill" style="background:${sx.bg};border-color:${sx.border};color:${sx.text}">${sx.icon} ${a.sex||'—'}</span>${a.paddock?`<span class="ac-paddock">Paddock ${a.paddock}</span>`:''} ${a.farmName?`<span class="ac-paddock" style="background:rgba(0,110,40,0.08);color:var(--accent)">🏡 ${a.farmName}</span>`:''}</div></div></div>
+  <div class="ac-sections">
+    <div class="ac-section"><div class="ac-section-hdr">Basic Information</div><div class="ac-grid">${field('Animal Type',a.animalType)}${field('Tag Number',a.tag)}${field('Status',a.status)}${field('Farm',a.farmName)}${field('Paddock',a.paddock)}</div></div>
+    <div class="ac-section"><div class="ac-section-hdr">Physical Characteristics</div><div class="ac-grid-3">${field('Sex',a.sex)}${field('Breed',a.breed)}${field('Coloring',a.coloring)}${field('Weight',a.weight?a.weight.toLocaleString()+' lb':null)}${field('Height',a.height?a.height+' in':null)}${field('Framescore',a.framescore||null)}</div>
+    <div class="ac-grid" style="margin-top:4px"><div class="ac-field"><div class="ac-field-lbl">Condition (BCS)</div><div class="ac-field-val">${bcsStr}</div>${a.bcs?bcsBar(a.bcs):''}</div>${field('Last Measured',a.lastMeasured)}</div></div>
+    <div class="ac-section"><div class="ac-section-hdr">Birth Information</div><div class="ac-grid">${field('Age',ageStr)}${field('Birth Date',a.birthDate)}${field('Maternity (Dam)',a.dam)}${field('Paternity (Sire)',a.sire)}</div><div style="margin-top:4px">${field('Offspring',a.offspring)}</div></div>
+    ${a.notes?`<div class="ac-section"><div class="ac-section-hdr">Additional Information</div><div class="ac-notes">${a.notes}</div></div>`:''}
+  </div></div>`;
+}
+function renderAnimals(){
+  const a=STATE.animals;
+  if(!a.length){document.getElementById('animalsEmpty').style.display='block';document.getElementById('animalsContent').style.display='none';return;}
+  document.getElementById('animalsEmpty').style.display='none';
+  document.getElementById('animalsContent').style.display='block';
+  document.getElementById('cardsGrid').innerHTML=a.map(buildAnimalCard).join('');
+  document.getElementById('animalCount').textContent=a.length+' animals';
+}
+function filterAnimals(){
+  const search=document.getElementById('animalSearch').value.toLowerCase();
+  const sort=document.getElementById('animalSort').value;
+  const cards=[...document.getElementById('cardsGrid').children];
+  let visible=0;
+  cards.forEach(c=>{
+    const name=c.dataset.name||'',tag=c.dataset.tag||'',breed=c.dataset.breed||'';
+    const textMatch=!search||(name+tag+breed).includes(search);
+    const statusMatch=animalFilter.status==='all'||c.dataset.status===animalFilter.status||c.dataset.sex===animalFilter.status;
+    c.style.display=(textMatch&&statusMatch)?'':'none';
+    if(textMatch&&statusMatch) visible++;
+  });
+  document.getElementById('animalCount').textContent=visible+' animals';
+  const grid=document.getElementById('cardsGrid');
+  const sorted=[...grid.children].filter(c=>c.style.display!=='none');
+  sorted.sort((a,b)=>{
+    if(sort==='weight') return parseFloat(b.dataset.weight||0)-parseFloat(a.dataset.weight||0);
+    if(sort==='name')   return (a.dataset.name||'').localeCompare(b.dataset.name||'');
+    if(sort==='tag')    return (a.dataset.tag||'').localeCompare(b.dataset.tag||'');
+    if(sort==='breed')  return (a.dataset.breed||'').localeCompare(b.dataset.breed||'');
+    if(sort==='paddock')return (a.dataset.paddock||'').localeCompare(b.dataset.paddock||'');
+    return 0;
+  });
+  sorted.forEach(c=>grid.appendChild(c));
+}
+function filterByStatus(btn,val){
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  animalFilter.status=val;
+  filterAnimals();
+}
+
+// Auto-load on page open
+loadFromBackend();
+
+// ════════════════════════════════════════════════════════════════
+// FIELD MAP ENGINE
+// ════════════════════════════════════════════════════════════════
+const FM = {
+  mode: 'draw', paddocks: [], drawing: [], selected: null, hovered: null,
+  imageLoaded: false, offsetX: 0, offsetY: 0, scale: 1, panStart: null,
+  natW: 0, natH: 0, idSeq: 1, mouseX: undefined, mouseY: undefined,
+};
+const FM_COLORS = {
+  ready:   {fill:'rgba(61,107,46,0.35)',  stroke:'#4ade80'},
+  grazing: {fill:'rgba(26,92,122,0.40)',  stroke:'#38bdf8'},
+  resting: {fill:'rgba(181,96,10,0.35)', stroke:'#f59e0b'},
+  hay:     {fill:'rgba(124,77,0,0.35)',   stroke:'#d97706'},
+  drawing: {fill:'rgba(255,210,0,0.22)', stroke:'#ffd200'},
+};
+
+function fmInit(){
+  const canvas=document.getElementById('fmCanvas');
+  const wrap=document.getElementById('fmWrap');
+  function resize(){ canvas.width=wrap.clientWidth; canvas.height=Math.max(wrap.clientHeight,460); fmDraw(); }
+  resize(); new ResizeObserver(resize).observe(wrap);
+  canvas.addEventListener('mousemove',fmMouseMove);
+  canvas.addEventListener('mousedown',fmMouseDown);
+  canvas.addEventListener('mouseup',fmMouseUp);
+  canvas.addEventListener('dblclick',fmDblClick);
+  canvas.addEventListener('mouseleave',()=>{FM.hovered=null;fmDraw();});
+  canvas.addEventListener('wheel',fmWheel,{passive:false});
+  canvas.addEventListener('contextmenu',e=>{e.preventDefault();fmUndoPoint();});
+}
+
+function fmPx(cx,cy){return{x:(cx-FM.offsetX)/FM.scale,y:(cy-FM.offsetY)/FM.scale};}
+function fmScr(wx,wy){return{x:wx*FM.scale+FM.offsetX,y:wy*FM.scale+FM.offsetY};}
+function fmRect(e){return e.target.getBoundingClientRect();}
+
+function fmMouseMove(e){
+  const r=fmRect(e),cx=e.clientX-r.left,cy=e.clientY-r.top;
+  if(FM.mode==='pan'&&FM.panStart){FM.offsetX+=cx-FM.panStart.x;FM.offsetY+=cy-FM.panStart.y;FM.panStart={x:cx,y:cy};fmDraw();return;}
+  FM.mouseX=cx;FM.mouseY=cy;
+  if(FM.mode==='draw'){fmDraw();return;}
+  const w=fmPx(cx,cy);let hit=null;
+  for(let i=FM.paddocks.length-1;i>=0;i--){if(fmPIP(w,FM.paddocks[i].points)){hit=FM.paddocks[i].id;break;}}
+  FM.hovered=hit; e.target.style.cursor=hit?'pointer':'default'; fmDraw();
+}
+
+function fmMouseDown(e){
+  if(e.button!==0)return;
+  const r=fmRect(e),cx=e.clientX-r.left,cy=e.clientY-r.top;
+  if(FM.mode==='pan'){FM.panStart={x:cx,y:cy};return;}
+  if(FM.mode==='draw'){
+    FM.drawing.push(fmPx(cx,cy));
+    const n=FM.drawing.length;
+    document.getElementById('fmHint').textContent=n===1?'Keep clicking — double-click to finish':n<3?`${n} points — need at least 3`:'Double-click to close polygon';
+    fmDraw();
+  }
+}
+
+function fmMouseUp(e){
+  if(FM.mode==='pan'){FM.panStart=null;return;}
+  if(FM.mode==='select'&&e.button===0){
+    const r=fmRect(e),w=fmPx(e.clientX-r.left,e.clientY-r.top);
+    let hit=null;for(let i=FM.paddocks.length-1;i>=0;i--){if(fmPIP(w,FM.paddocks[i].points)){hit=FM.paddocks[i];break;}}
+    fmSelectPaddock(hit?hit.id:null);
+  }
+}
+
+function fmDblClick(e){
+  if(FM.mode!=='draw')return; e.preventDefault();
+  if(FM.drawing.length<3){FM.drawing=[];document.getElementById('fmHint').textContent='Need ≥3 points — try again';fmDraw();return;}
+  FM.drawing.pop(); // remove extra point from first click of dblclick
+  fmClosePoly();
+}
+
+function fmWheel(e){
+  e.preventDefault();
+  const r=fmRect(e),cx=e.clientX-r.left,cy=e.clientY-r.top;
+  const f=e.deltaY<0?1.12:0.89;
+  FM.offsetX=cx-(cx-FM.offsetX)*f; FM.offsetY=cy-(cy-FM.offsetY)*f;
+  FM.scale=Math.min(Math.max(FM.scale*f,0.08),30); fmDraw();
+}
+
+function fmClosePoly(){
+  const newPts=[...FM.drawing];
+
+  // ── Intersection guard ─────────────────────────────────────────
+  // Returns true if two line segments (p1→p2) and (p3→p4) intersect
+  function segIntersect(p1,p2,p3,p4){
+    const d1x=p2.x-p1.x, d1y=p2.y-p1.y;
+    const d2x=p4.x-p3.x, d2y=p4.y-p3.y;
+    const cross=d1x*d2y-d1y*d2x;
+    if(Math.abs(cross)<1e-10) return false; // parallel
+    const t=((p3.x-p1.x)*d2y-(p3.y-p1.y)*d2x)/cross;
+    const u=((p3.x-p1.x)*d1y-(p3.y-p1.y)*d1x)/cross;
+    return t>0&&t<1&&u>0&&u<1;
+  }
+  function polysIntersect(a,b){
+    // check edge-edge intersections
+    for(let i=0;i<a.length;i++){
+      const a1=a[i], a2=a[(i+1)%a.length];
+      for(let j=0;j<b.length;j++){
+        const b1=b[j], b2=b[(j+1)%b.length];
+        if(segIntersect(a1,a2,b1,b2)) return true;
+      }
+    }
+    // check containment (one polygon completely inside the other)
+    if(fmPIP(a[0],b)||fmPIP(b[0],a)) return true;
+    return false;
+  }
+
+  for(const pk of FM.paddocks){
+    if(polysIntersect(newPts, pk.points)){
+      document.getElementById('fmHint').textContent=
+        `⚠ Overlaps "${pk.name}" — paddocks cannot intersect. Undo points and redraw.`;
+      // flash the offending paddock
+      const prev=FM.selected; FM.selected=pk.id; fmDraw();
+      setTimeout(()=>{FM.selected=prev; fmDraw();}, 1200);
+      return; // reject — leave FM.drawing intact so user can undo
+    }
+  }
+
+  const id='pk_'+(FM.idSeq++);
+  FM.paddocks.push({id,name:'Paddock '+FM.idSeq,points:newPts,status:'ready',acres:0,count:0,days:0,breed:'',lastGrazed:'',notes:''});
+  FM.drawing=[]; fmSelectPaddock(id); fmDraw(); fmRefreshTables(); fmRefreshStats();
+  document.getElementById('fmHint').textContent='Paddock created — fill in details in the sidebar';
+}
+
+function fmSetMode(mode){
+  FM.mode=mode; FM.drawing=[]; FM.panStart=null;
+  const wrap=document.getElementById('fmWrap');
+  wrap.className='fm-canvas-wrap'+(mode==='pan'?' pan-mode':mode==='select'?' select-mode':'');
+  document.getElementById('fmDrawBtn').classList.toggle('active',mode==='draw');
+  document.getElementById('fmSelectBtn').classList.toggle('active',mode==='select');
+  document.getElementById('fmPanBtn').classList.toggle('active',mode==='pan');
+  const h={draw:'Click to place points, double-click to finish polygon',select:'Click a paddock to select and edit it',pan:'Click and drag to pan the image'};
+  document.getElementById('fmHint').textContent=h[mode]; fmDraw();
+}
+
+function fmUndoPoint(){if(FM.drawing.length){FM.drawing.pop();fmDraw();}}
+function fmCancelDraw(){FM.drawing=[];document.getElementById('fmHint').textContent='Drawing cancelled';fmDraw();}
+
+function fmZoom(f){
+  const c=document.getElementById('fmCanvas'),cx=c.width/2,cy=c.height/2;
+  FM.offsetX=cx-(cx-FM.offsetX)*f; FM.offsetY=cy-(cy-FM.offsetY)*f; FM.scale*=f; fmDraw();
+}
+
+function fmResetView(){
+  const c=document.getElementById('fmCanvas');
+  if(!FM.imageLoaded){FM.offsetX=0;FM.offsetY=0;FM.scale=1;fmDraw();return;}
+  const sx=c.width/FM.natW, sy=c.height/FM.natH;
+  FM.scale=Math.min(sx,sy)*0.96;
+  FM.offsetX=(c.width-FM.natW*FM.scale)/2; FM.offsetY=(c.height-FM.natH*FM.scale)/2; fmDraw();
+}
+
+function fmLoadImage(input){
+  const file=input.files[0]; if(!file)return;
+  const img=document.getElementById('fmBg');
+  const reader=new FileReader();
+  reader.onload=e=>{
+    img.onload=()=>{FM.imageLoaded=true;FM.natW=img.naturalWidth;FM.natH=img.naturalHeight;img.style.display='block';document.getElementById('fmUploadPrompt').classList.add('hidden');fmResetView();};
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function fmDraw(){
+  const canvas=document.getElementById('fmCanvas');
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // always fill solid dark bg so pan never shows page behind canvas
+  ctx.fillStyle='#1a1a18';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  if(FM.imageLoaded){const img=document.getElementById('fmBg');ctx.drawImage(img,FM.offsetX,FM.offsetY,FM.natW*FM.scale,FM.natH*FM.scale);}
+
+  // completed paddocks
+  FM.paddocks.forEach(pk=>{
+    if(!pk.points||pk.points.length<2)return;
+    const C=FM_COLORS[pk.status]||FM_COLORS.ready;
+    const isSel=pk.id===FM.selected, isHov=pk.id===FM.hovered;
+    ctx.beginPath();
+    pk.points.forEach((p,i)=>{const s=fmScr(p.x,p.y);i===0?ctx.moveTo(s.x,s.y):ctx.lineTo(s.x,s.y);});
+    ctx.closePath();
+    ctx.fillStyle=C.fill; ctx.fill();
+    if(isSel){ctx.strokeStyle=C.stroke;ctx.lineWidth=6;ctx.globalAlpha=0.4;ctx.stroke();ctx.globalAlpha=1;}
+    ctx.strokeStyle=isSel?'#fff':(isHov?'#fff':C.stroke);
+    ctx.lineWidth=isSel?2.5:(isHov?2:1.5); ctx.setLineDash([]); ctx.stroke();
+
+    // label
+    const cen=fmCentroid(pk.points),cc=fmScr(cen.x,cen.y);
+    const fs=Math.max(9,Math.min(14,12*Math.sqrt(FM.scale)));
+    ctx.font=`600 ${fs}px IBM Plex Mono,monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.strokeStyle='rgba(0,0,0,0.75)'; ctx.lineWidth=3; ctx.lineJoin='round'; ctx.strokeText(pk.name,cc.x,cc.y);
+    ctx.fillStyle='#fff'; ctx.fillText(pk.name,cc.x,cc.y);
+
+    // animal count badge
+    if(pk.count>0&&FM.scale>0.3){
+      const bx=cc.x,by=cc.y-fs-8,br=Math.max(9,fs*0.75);
+      ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2);
+      ctx.fillStyle='#e53e3e'; ctx.fill();
+      ctx.font=`700 ${Math.max(8,fs*0.78)}px IBM Plex Mono,monospace`;
+      ctx.fillStyle='#fff'; ctx.fillText(String(pk.count),bx,by);
+    }
+  });
+
+  // in-progress polygon
+  if(FM.drawing.length>0){
+    ctx.beginPath();
+    FM.drawing.forEach((p,i)=>{const s=fmScr(p.x,p.y);i===0?ctx.moveTo(s.x,s.y):ctx.lineTo(s.x,s.y);});
+    if(FM.mouseX!==undefined) ctx.lineTo(FM.mouseX,FM.mouseY);
+    ctx.strokeStyle='#ffd200'; ctx.lineWidth=2; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
+    if(FM.drawing.length>=3){
+      ctx.beginPath();
+      FM.drawing.forEach((p,i)=>{const s=fmScr(p.x,p.y);i===0?ctx.moveTo(s.x,s.y):ctx.lineTo(s.x,s.y);});
+      ctx.closePath(); ctx.fillStyle='rgba(255,210,0,0.18)'; ctx.fill();
+    }
+    FM.drawing.forEach((p,i)=>{
+      const s=fmScr(p.x,p.y);
+      ctx.beginPath(); ctx.arc(s.x,s.y,i===0?7:5,0,Math.PI*2);
+      ctx.fillStyle=i===0?'#ffd200':'#fff'; ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1.5; ctx.stroke();
+    });
+  }
+}
+
+function fmCentroid(pts){return{x:pts.reduce((s,p)=>s+p.x,0)/pts.length,y:pts.reduce((s,p)=>s+p.y,0)/pts.length};}
+function fmPIP(pt,poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;
+    if(((yi>pt.y)!==(yj>pt.y))&&(pt.x<(xj-xi)*(pt.y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+function fmSelectPaddock(id){
+  FM.selected=id; const pk=FM.paddocks.find(p=>p.id===id);
+  document.getElementById('fmSideNoSel').style.display=pk?'none':'block';
+  document.getElementById('fmSideForm').style.display=pk?'block':'none';
+  document.getElementById('fmSideTitle').textContent=pk?pk.name:'Paddock Details';
+  if(pk){
+    document.getElementById('fmFldName').value=pk.name||'';
+    document.getElementById('fmFldStatus').value=pk.status||'ready';
+    document.getElementById('fmFldAcres').value=pk.acres||'';
+    document.getElementById('fmFldCount').value=pk.count||'';
+    document.getElementById('fmFldDays').value=pk.days||'';
+    document.getElementById('fmFldBreed').value=pk.breed||'';
+    document.getElementById('fmFldLastGrazed').value=pk.lastGrazed||'';
+    document.getElementById('fmFldNotes').value=pk.notes||'';
+  }
+  fmHighlightRow(id); fmDraw();
+}
+
+function fmSavePaddock(){
+  const pk=FM.paddocks.find(p=>p.id===FM.selected); if(!pk)return;
+  pk.name=document.getElementById('fmFldName').value||pk.name;
+  pk.status=document.getElementById('fmFldStatus').value;
+  pk.acres=parseFloat(document.getElementById('fmFldAcres').value)||0;
+  pk.count=parseInt(document.getElementById('fmFldCount').value)||0;
+  pk.days=parseInt(document.getElementById('fmFldDays').value)||0;
+  pk.breed=document.getElementById('fmFldBreed').value;
+  pk.lastGrazed=document.getElementById('fmFldLastGrazed').value;
+  pk.notes=document.getElementById('fmFldNotes').value;
+  document.getElementById('fmSideTitle').textContent=pk.name;
+  document.getElementById('fmHint').textContent=`"${pk.name}" saved ✓`;
+  fmDraw(); fmRefreshTables(); fmRefreshStats();
+}
+
+function fmDeleteSelected(){
+  if(!FM.selected||!confirm('Delete this paddock?'))return;
+  FM.paddocks=FM.paddocks.filter(p=>p.id!==FM.selected); FM.selected=null;
+  document.getElementById('fmSideNoSel').style.display='block';
+  document.getElementById('fmSideForm').style.display='none';
+  document.getElementById('fmSideTitle').textContent='Paddock Details';
+  fmDraw(); fmRefreshTables(); fmRefreshStats();
+}
+
+function fmHighlightRow(id){
+  document.querySelectorAll('#fmActiveTbody tr,#fmOpenTbody tr').forEach(tr=>tr.classList.toggle('active-row',tr.dataset.id===id));
+}
+
+function fmRefreshTables(){
+  const active=FM.paddocks.filter(p=>p.status==='grazing');
+  const open=FM.paddocks.filter(p=>p.status!=='grazing');
+  const fmDate=d=>{try{return new Date(d).toLocaleDateString('en-US',{month:'short',day:'2-digit',year:'numeric'});}catch(e){return d;}};
+  const adpa=(pk)=>pk.acres>0&&pk.count>0&&pk.days>0?((pk.count*pk.days)/pk.acres).toFixed(2):'—';
+  const dot=(s)=>`<span class="fm-status-dot" style="background:${(FM_COLORS[s]||FM_COLORS.ready).stroke}"></span>`;
+
+  document.getElementById('fmActiveTbody').innerHTML=active.length?active.map(pk=>`
+    <tr data-id="${pk.id}" onclick="fmSelectFromTable('${pk.id}')">
+      <td>${dot(pk.status)}<a class="fm-name-link">${pk.name}</a></td>
+      <td><span class="fm-count-badge">${pk.count}<span class="fm-au">${pk.breed?pk.breed.slice(0,8):'AU'}</span></span></td>
+      <td>${pk.days||'—'} days<div class="fm-days-sub">${pk.lastGrazed?'Starting: '+fmDate(pk.lastGrazed):''}</div></td>
+      <td>${adpa(pk)}</td>
+    </tr>`).join('')
+    :'<tr class="fm-empty-row"><td colspan="4">No active (grazing) paddocks yet</td></tr>';
+
+  document.getElementById('fmOpenTbody').innerHTML=open.length?open.map(pk=>{
+    const dr=pk.lastGrazed?Math.floor((Date.now()-new Date(pk.lastGrazed))/86400000)+'d':'—';
+    return`<tr data-id="${pk.id}" onclick="fmSelectFromTable('${pk.id}')">
+      <td>${dot(pk.status)}<a class="fm-name-link">${pk.name}</a><div style="font-size:9px;color:var(--muted);font-family:var(--font-mono)">${pk.status}</div></td>
+      <td>${pk.lastGrazed?fmDate(pk.lastGrazed):'—'}</td>
+      <td>${pk.count||'—'}</td>
+      <td>${pk.days?pk.days+' days':'—'}</td>
+      <td>${adpa(pk)}</td>
+      <td>${dr}</td>
+    </tr>`;}).join('')
+    :'<tr class="fm-empty-row"><td colspan="6">No open paddocks yet</td></tr>';
+}
+
+function fmSelectFromTable(id){fmSelectPaddock(id);fmSetMode('select');}
+
+function fmRefreshStats(){
+  document.getElementById('fmStatTotal').textContent=FM.paddocks.length;
+  document.getElementById('fmStatGrazing').textContent=FM.paddocks.filter(p=>p.status==='grazing').length;
+  document.getElementById('fmStatReady').textContent=FM.paddocks.filter(p=>p.status==='ready').length;
+  document.getElementById('fmStatResting').textContent=FM.paddocks.filter(p=>p.status==='resting').length;
+}
+
+// Init after DOM ready
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fmInit);
+else fmInit();
+</script>
+</body>
+</html>
