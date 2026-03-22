@@ -7,8 +7,7 @@ Run with:
 Interactive docs at: http://localhost:8001/docs
 
 Environment variables (set in .env):
-    OPENWEATHER_API_KEY — required for weather polling and live weather proxy
-    OPENAI_API_KEY      — optional (used by AI advisor)
+    OPENWEATHER_API_KEY — no longer required (now uses Open-Meteo, free, no key needed)
     DATABASE_URL        — sqlite path, default "pasture.db"
     FARM_LAT            — farm latitude, default 38.03
     FARM_LON            — farm longitude, default -78.48
@@ -232,52 +231,154 @@ def trigger_weather_poll():
 @app.get("/weather/current", tags=["Weather"])
 async def weather_current(location: str):
     """
-    Proxy current conditions from OpenWeatherMap for any city string.
-    The OPENWEATHER_API_KEY is read from .env — it is never sent to the browser.
-    Returns the raw OWM /data/2.5/weather response in imperial units.
-
-    Example: GET /weather/current?location=Charlottesville%2C+US
+    Current conditions for any city string.
+    Geocodes via Nominatim (free), then fetches from Open-Meteo (free, no API key).
+    Response is shaped to match the OWM /data/2.5/weather structure the frontend expects.
     """
-    if not OPENWEATHER_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="OPENWEATHER_API_KEY is not set in .env"
-        )
     async with httpx.AsyncClient() as client:
-        r = await client.get(
-            "https://api.openweathermap.org/data/2.5/weather",
-            params={"q": location, "appid": OPENWEATHER_API_KEY, "units": "imperial"},
+        # 1. Geocode
+        geo = await client.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"format": "json", "limit": 1, "q": location},
+            headers={"User-Agent": "GreenPastures/1.0", "Accept-Language": "en"},
             timeout=10,
         )
-    if not r.is_success:
-        detail = r.json().get("message", f"OWM error {r.status_code}")
-        raise HTTPException(status_code=r.status_code, detail=detail)
-    return r.json()
+        geo.raise_for_status()
+        results = geo.json()
+        if not results:
+            raise HTTPException(status_code=404, detail=f"Location not found: {location}")
+        lat  = float(results[0]["lat"])
+        lon  = float(results[0]["lon"])
+        name = results[0].get("display_name", location).split(",")[0].strip()
+        country = results[0].get("display_name", "").split(",")[-1].strip()[:2].upper()
+
+        # 2. Current weather from Open-Meteo
+        wx = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude":            lat,
+                "longitude":           lon,
+                "current":             "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,cloud_cover,surface_pressure,visibility",
+                "temperature_unit":    "fahrenheit",
+                "wind_speed_unit":     "mph",
+                "precipitation_unit":  "inch",
+                "timezone":            "auto",
+                "forecast_days":       1,
+            },
+            timeout=10,
+        )
+        wx.raise_for_status()
+        d = wx.json()
+        c = d.get("current", {})
+
+    temp_f    = c.get("temperature_2m", 0)
+    feels_f   = c.get("apparent_temperature", temp_f)
+    humidity  = c.get("relative_humidity_2m", 0)
+    wind_mph  = c.get("wind_speed_10m", 0)
+    clouds    = c.get("cloud_cover", 0)
+    pressure  = c.get("surface_pressure", 1013)
+    precip_in = c.get("precipitation", 0)
+    vis_m     = int(c.get("visibility", 10000) or 10000)
+
+    # Pick a simple weather description from cloud cover
+    if clouds < 20:   desc, icon = "clear sky",         "01d"
+    elif clouds < 50: desc, icon = "partly cloudy",     "02d"
+    elif clouds < 85: desc, icon = "cloudy",            "03d"
+    else:             desc, icon = "overcast",           "04d"
+    if precip_in > 0.01: desc, icon = "light rain",    "10d"
+    if precip_in > 0.1:  desc, icon = "rain",          "09d"
+
+    # Return OWM-compatible shape so frontend needs no changes
+    return {
+        "name": name,
+        "sys":  {"country": country},
+        "coord": {"lat": lat, "lon": lon},
+        "main": {
+            "temp":       temp_f,
+            "feels_like": feels_f,
+            "humidity":   humidity,
+            "pressure":   pressure,
+        },
+        "wind":   {"speed": wind_mph},
+        "clouds": {"all": clouds},
+        "visibility": vis_m,
+        "rain":   {"1h": precip_in},
+        "weather": [{"description": desc, "icon": icon}],
+    }
+
 
 @app.get("/weather/forecast", tags=["Weather"])
 async def weather_forecast(location: str):
     """
-    Proxy 5-day / 3-hour forecast from OpenWeatherMap for any city string.
-    The OPENWEATHER_API_KEY is read from .env — it is never sent to the browser.
-    Returns the raw OWM /data/2.5/forecast response in imperial units.
-
-    Example: GET /weather/forecast?location=Charlottesville%2C+US
+    7-day forecast for any city string.
+    Geocodes via Nominatim (free), then fetches from Open-Meteo (free, no API key).
+    Response is shaped to match the OWM /data/2.5/forecast structure the frontend expects.
     """
-    if not OPENWEATHER_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="OPENWEATHER_API_KEY is not set in .env"
-        )
     async with httpx.AsyncClient() as client:
-        r = await client.get(
-            "https://api.openweathermap.org/data/2.5/forecast",
-            params={"q": location, "appid": OPENWEATHER_API_KEY, "units": "imperial"},
+        # 1. Geocode
+        geo = await client.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"format": "json", "limit": 1, "q": location},
+            headers={"User-Agent": "GreenPastures/1.0", "Accept-Language": "en"},
             timeout=10,
         )
-    if not r.is_success:
-        detail = r.json().get("message", f"OWM error {r.status_code}")
-        raise HTTPException(status_code=r.status_code, detail=detail)
-    return r.json()
+        geo.raise_for_status()
+        results = geo.json()
+        if not results:
+            raise HTTPException(status_code=404, detail=f"Location not found: {location}")
+        lat = float(results[0]["lat"])
+        lon = float(results[0]["lon"])
+
+        # 2. Daily forecast from Open-Meteo
+        fc = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude":           lat,
+                "longitude":          lon,
+                "daily":              "temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,cloud_cover_mean",
+                "temperature_unit":   "fahrenheit",
+                "wind_speed_unit":    "mph",
+                "precipitation_unit": "inch",
+                "timezone":           "auto",
+                "forecast_days":      8,
+            },
+            timeout=10,
+        )
+        fc.raise_for_status()
+        d = fc.json().get("daily", {})
+
+    # Build a list that matches OWM forecast list shape (one entry per day at noon)
+    items = []
+    dates      = d.get("time", [])
+    temp_max   = d.get("temperature_2m_max", [])
+    temp_min   = d.get("temperature_2m_min", [])
+    precip     = d.get("precipitation_sum", [])
+    wind       = d.get("wind_speed_10m_max", [])
+    cloud      = d.get("cloud_cover_mean", [])
+
+    for i, date in enumerate(dates):
+        avg_temp  = ((temp_max[i] or 0) + (temp_min[i] or 0)) / 2
+        precip_in = precip[i] or 0
+        clouds    = cloud[i] or 0
+
+        if clouds < 20:      desc, icon = "clear sky",   "01d"
+        elif clouds < 50:    desc, icon = "partly cloudy","02d"
+        elif clouds < 85:    desc, icon = "cloudy",      "03d"
+        else:                desc, icon = "overcast",     "04d"
+        if precip_in > 0.01: desc, icon = "light rain",  "10d"
+        if precip_in > 0.1:  desc, icon = "rain",        "09d"
+
+        items.append({
+            "dt_txt":  f"{date} 12:00:00",
+            "main":    {"temp": avg_temp},
+            "weather": [{"description": desc, "icon": icon}],
+            "wind":    {"speed": wind[i] or 0},
+            "rain":    {"3h": precip_in / 8},
+        })
+
+    return {"list": items}
+
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SENSORS
